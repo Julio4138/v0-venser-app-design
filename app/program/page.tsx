@@ -435,6 +435,20 @@ export default function ProgramPage() {
 
       if (error) throw error
 
+      // Verificar se já completou um dia hoje
+      if (data?.error === 'already_completed_today') {
+        toast.error(
+          language === "pt"
+            ? "Você já completou um dia hoje. O próximo dia será desbloqueado amanhã."
+            : "You already completed a day today. The next day will be unlocked tomorrow.",
+          {
+            duration: 5000,
+          }
+        )
+        setIsCompleting(false)
+        return
+      }
+
       if (data?.success) {
         const totalXpEarned = data.xp_earned || 0
         setXpEarned(totalXpEarned)
@@ -455,13 +469,17 @@ export default function ProgramPage() {
 
         // If next day was unlocked, show notification
         if (data.next_day_unlocked && selectedDay < 90) {
+          const unlockDate = data.next_day_unlock_date 
+            ? new Date(data.next_day_unlock_date)
+            : new Date(Date.now() + 24 * 60 * 60 * 1000) // Próximo dia por padrão
+          
           setTimeout(() => {
             toast.info(
               language === "pt"
-                ? `🎉 Dia ${selectedDay + 1} desbloqueado! Continue sua jornada!`
-                : `🎉 Day ${selectedDay + 1} unlocked! Continue your journey!`,
+                ? `🎉 Dia ${selectedDay + 1} será desbloqueado amanhã! Continue sua jornada um dia de cada vez.`
+                : `🎉 Day ${selectedDay + 1} will be unlocked tomorrow! Continue your journey one day at a time.`,
               {
-                duration: 5000,
+                duration: 6000,
               }
             )
           }, 2000)
@@ -474,6 +492,9 @@ export default function ProgramPage() {
           setReflectionText("")
           setDayTasks([])
           setDayTemplate(null)
+          
+          // Recarregar dados para atualizar progresso
+          loadUserData()
         }, 4000)
       }
     } catch (error: any) {
@@ -492,7 +513,26 @@ export default function ProgramPage() {
     if (!day) return "locked"
 
     if (day.completed) return "completed"
-    if (day.unlocked_at || dayNumber === 1) return "current"
+    
+    // Verificar se o dia está desbloqueado (unlocked_at deve ser no passado ou hoje)
+    // Comparar apenas a data, não a hora, para permitir acesso no mesmo dia
+    if (day.unlocked_at) {
+      const unlockDate = new Date(day.unlocked_at)
+      unlockDate.setHours(0, 0, 0, 0)
+      const now = new Date()
+      now.setHours(0, 0, 0, 0)
+      
+      // Só está desbloqueado se a data de desbloqueio já passou (incluindo hoje)
+      if (unlockDate <= now) {
+        return "current"
+      }
+      // Se ainda não chegou a data, está bloqueado
+      return "locked"
+    }
+    
+    // Dia 1 sempre está disponível (se não tiver unlocked_at definido)
+    if (dayNumber === 1) return "current"
+    
     return "locked"
   }
 
@@ -520,6 +560,28 @@ export default function ProgramPage() {
   const handleDayClick = async (dayNumber: number) => {
     const status = getDayStatus(dayNumber)
     
+    // Verificar se o dia está bloqueado por data
+    const day = programDays.find((d) => d.day_number === dayNumber)
+    if (day?.unlocked_at) {
+      const unlockDate = new Date(day.unlocked_at)
+      const now = new Date()
+      if (unlockDate > now) {
+        // Calcular quando será desbloqueado
+        const hoursUntilUnlock = Math.ceil((unlockDate.getTime() - now.getTime()) / (1000 * 60 * 60))
+        const daysUntilUnlock = Math.ceil(hoursUntilUnlock / 24)
+        
+        toast.info(
+          language === "pt"
+            ? `Este dia será desbloqueado ${daysUntilUnlock === 1 ? 'amanhã' : `em ${daysUntilUnlock} dias`}. Complete um dia por vez para manter o progresso consistente.`
+            : `This day will be unlocked ${daysUntilUnlock === 1 ? 'tomorrow' : `in ${daysUntilUnlock} days`}. Complete one day at a time to maintain consistent progress.`,
+          {
+            duration: 5000,
+          }
+        )
+        return
+      }
+    }
+    
     if (status === "locked" && !canUnlockDay(dayNumber)) {
       toast.info(
         language === "pt"
@@ -541,8 +603,16 @@ export default function ProgramPage() {
   }
 
   const currentDayData = programDays.find((d) => d.day_number === userProgress.currentDay)
-  const allRequiredTasksCompleted =
-    dayTasks.filter((t) => t.is_required).every((t) => t.completed) && dayTasks.length > 0
+  
+  // Verificar se todas as tarefas obrigatórias estão completas
+  const requiredTasks = dayTasks.filter((t) => t.is_required)
+  const allRequiredTasksCompleted = 
+    requiredTasks.length === 0 || // Se não há tarefas obrigatórias, permite completar
+    (requiredTasks.length > 0 && requiredTasks.every((t) => t.completed))
+  
+  // Verificar se há tarefas (se não houver tarefas, permite completar se houver template)
+  const hasTasks = dayTasks.length > 0
+  const canComplete = allRequiredTasksCompleted && (hasTasks || dayTemplate)
 
   if (isLoading) {
     return (
@@ -629,76 +699,98 @@ export default function ProgramPage() {
 
       {/* Day Detail Dialog */}
       <Dialog open={selectedDay !== null} onOpenChange={() => setSelectedDay(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">
-              {language === "pt" ? "Dia" : "Day"} {selectedDay}
-              {dayTemplate && ` - ${dayTemplate.title_pt}`}
-            </DialogTitle>
-            <DialogDescription>
-              {language === "pt"
-                ? "Complete todas as tarefas e faça sua reflexão para desbloquear o próximo dia"
-                : "Complete all tasks and make your reflection to unlock the next day"}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-5xl w-[95vw] max-h-[95vh] p-0 gap-0 overflow-hidden flex flex-col">
+          {/* Header com gradiente */}
+          <div className="px-6 pt-6 pb-4 bg-gradient-to-r from-[oklch(0.54_0.18_285)]/20 to-[oklch(0.7_0.15_220)]/20 border-b border-white/10">
+            <DialogHeader className="text-left">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shrink-0">
+                  <span className="text-white font-bold text-lg">{selectedDay}</span>
+                </div>
+                <DialogTitle className="text-xl md:text-2xl font-bold text-foreground leading-tight">
+                  {dayTemplate 
+                    ? (language === "pt" ? dayTemplate.title_pt : language === "es" ? dayTemplate.title_es : dayTemplate.title_en)
+                    : `${language === "pt" ? "Dia" : "Day"} ${selectedDay}`
+                  }
+                </DialogTitle>
+              </div>
+              <DialogDescription className="text-sm text-muted-foreground">
+                {language === "pt"
+                  ? "Complete todas as tarefas e faça sua reflexão para desbloquear o próximo dia"
+                  : "Complete all tasks and make your reflection to unlock the next day"}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
 
+          {/* Conteúdo scrollável */}
           {dayTemplate && (
-            <div className="space-y-6 py-4">
-              {/* Day Content */}
-              <ProgramDayContent
-                title={dayTemplate.title_pt}
-                contentText={dayTemplate.content_text_pt}
-                contentAudioUrl={dayTemplate.content_audio_url}
-                contentVideoUrl={dayTemplate.content_video_url}
-                motivationalQuote={dayTemplate.motivational_quote_pt}
-                language={language}
-              />
-
-              {/* Tasks Checklist */}
-              {dayTasks.length > 0 && (
-                <ProgramDayChecklist
-                  tasks={dayTasks}
-                  onTaskComplete={handleTaskComplete}
+            <>
+              <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-6 space-y-4 md:space-y-6 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+                {/* Day Content */}
+                <ProgramDayContent
+                  title={language === "pt" ? dayTemplate.title_pt : language === "es" ? dayTemplate.title_es : dayTemplate.title_en || dayTemplate.title_pt}
+                  contentText={language === "pt" ? dayTemplate.content_text_pt : language === "es" ? dayTemplate.content_text_es : dayTemplate.content_text_en || dayTemplate.content_text_pt}
+                  contentAudioUrl={dayTemplate.content_audio_url}
+                  contentVideoUrl={dayTemplate.content_video_url}
+                  motivationalQuote={language === "pt" ? dayTemplate.motivational_quote_pt : language === "es" ? dayTemplate.motivational_quote_es : dayTemplate.motivational_quote_en || dayTemplate.motivational_quote_pt}
                   language={language}
                 />
-              )}
 
-              {/* Reflection */}
-              <ProgramDayReflection
-                reflectionText={reflectionText}
-                onReflectionChange={setReflectionText}
-                language={language}
-              />
-
-              {/* Complete Button */}
-              <div className="space-y-2">
-                {!allRequiredTasksCompleted && dayTasks.length > 0 && (
-                  <p className="text-sm text-muted-foreground text-center">
-                    {language === "pt"
-                      ? "Complete todas as tarefas obrigatórias para finalizar o dia"
-                      : "Complete all required tasks to finish the day"}
-                  </p>
+                {/* Tasks Checklist */}
+                {dayTasks.length > 0 && (
+                  <ProgramDayChecklist
+                    tasks={dayTasks}
+                    onTaskComplete={handleTaskComplete}
+                    language={language}
+                  />
                 )}
-                <Button
-                  size="lg"
-                  onClick={handleCompleteDay}
-                  disabled={!allRequiredTasksCompleted || isCompleting || (dayTasks.length === 0 && !dayTemplate)}
-                  className="w-full h-14 bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isCompleting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      {language === "pt" ? "Completando..." : "Completing..."}
-                    </>
-                  ) : (
-                    <>
-                      <Check className="mr-2 h-5 w-5" />
-                      {language === "pt" ? "Completar Dia e Desbloquear Próximo" : "Complete Day and Unlock Next"}
-                    </>
-                  )}
-                </Button>
+
+                {/* Reflection */}
+                <ProgramDayReflection
+                  reflectionText={reflectionText}
+                  onReflectionChange={setReflectionText}
+                  language={language}
+                />
               </div>
-            </div>
+
+              {/* Footer fixo com botão */}
+              <div className="px-4 md:px-6 py-3 md:py-4 border-t border-white/10 bg-background/95 backdrop-blur-sm sticky bottom-0 z-10">
+                <div className="space-y-2">
+                  {!canComplete && dayTasks.length > 0 && (
+                    <p className="text-xs md:text-sm text-muted-foreground text-center">
+                      {language === "pt"
+                        ? "Complete todas as tarefas obrigatórias para finalizar o dia"
+                        : "Complete all required tasks to finish the day"}
+                    </p>
+                  )}
+                  {canComplete && !isCompleting && (
+                    <p className="text-xs md:text-sm text-green-400/80 text-center">
+                      {language === "pt"
+                        ? "✓ Pronto para completar o dia!"
+                        : "✓ Ready to complete the day!"}
+                    </p>
+                  )}
+                  <Button
+                    size="lg"
+                    onClick={handleCompleteDay}
+                    disabled={!canComplete || isCompleting}
+                    className="w-full h-12 md:h-14 bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity font-semibold"
+                  >
+                    {isCompleting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        {language === "pt" ? "Completando..." : "Completing..."}
+                      </>
+                    ) : (
+                      <>
+                        <Check className="mr-2 h-5 w-5" />
+                        {language === "pt" ? "Completar Dia e Desbloquear Próximo" : "Complete Day and Unlock Next"}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>

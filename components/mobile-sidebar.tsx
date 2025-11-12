@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, TrendingUp, Wrench, Users, Target, User, Sparkles, X } from "lucide-react"
+import { LayoutDashboard, TrendingUp, Wrench, Users, Target, User, Sparkles, X, Bot } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/lib/language-context"
 import { translations } from "@/lib/translations"
@@ -26,6 +26,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
     { name: t.tools, href: "/tools", icon: Wrench },
     { name: t.community, href: "/community", icon: Users },
     { name: t.missions, href: "/missions", icon: Sparkles },
+    { name: t.tony, href: "/tony", icon: Bot },
     { name: t.profile, href: "/profile", icon: User },
   ]
 

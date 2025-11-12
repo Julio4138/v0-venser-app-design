@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { ProgressRing } from "@/components/progress-ring"
 import { TreeOfLife } from "@/components/tree-of-life"
 import { TimerDisplay } from "@/components/timer-display"
@@ -13,25 +14,92 @@ import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
-import { Hand, Brain, RotateCcw, MoreHorizontal, Sparkles, AlertCircle, Check, X, Minus, Cloud, Plus, Flower2, Bell, TreePine, MessageCircle, Globe, SquarePlus, Circle, HelpCircle, Star, ChevronRight, Heart, BookOpen, Smile, Users, Target, RotateCw, ClipboardList, Wind, Award, Quote } from "lucide-react"
+import { Hand, Brain, RotateCcw, MoreHorizontal, Sparkles, AlertCircle, Check, X, Minus, Cloud, Plus, Flower2, Bell, TreePine, MessageCircle, Globe, SquarePlus, Circle, HelpCircle, Star, ChevronRight, Heart, BookOpen, Smile, Users, Target, RotateCw, ClipboardList, Wind, Award, Quote, Flame } from "lucide-react"
 import { PeacefulAnimation } from "@/components/peaceful-animation"
 import { LifeTreeLandscape } from "@/components/life-tree-landscape"
 import Link from "next/link"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
+import { supabase } from "@/lib/supabase/client"
 
 export default function DashboardPage() {
   const { language } = useLanguage()
   const t = translations[language]
   const { collapsed } = useSidebar()
-  const [startDate] = useState(() => new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)) // 14 days ago
+  const router = useRouter()
+  const [startDate, setStartDate] = useState<Date | null>(null)
+  const [userProgress, setUserProgress] = useState({
+    currentDay: 0,
+    currentStreak: 0,
+    totalXp: 0,
+    totalDaysClean: 0,
+  })
+  const [isLoading, setIsLoading] = useState(true)
   
-  // Demo data - in production this would come from a database
-  const currentDay = 14
-  const brainProgress = Math.min((currentDay / 90) * 100, 100)
+  // Calcular progresso do cérebro baseado no dia atual
+  const brainProgress = Math.min((userProgress.currentDay / 90) * 100, 100)
   
   // Analytics data
   const analyticsData = [60, 65, 70, 68, 75, 80, 82, 78, 85, 88, 85, 90]
+
+  // Carregar dados do usuário
+  useEffect(() => {
+    loadUserData()
+    
+    // Atualizar a cada 30 segundos para refletir mudanças
+    const interval = setInterval(loadUserData, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const loadUserData = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        setIsLoading(false)
+        return
+      }
+
+      // Buscar progresso do usuário
+      const { data: progress } = await supabase
+        .from("user_progress")
+        .select("*")
+        .eq("user_id", user.id)
+        .single()
+
+      if (progress) {
+        setUserProgress({
+          currentDay: progress.current_day || 0,
+          currentStreak: progress.current_streak || 0,
+          totalXp: progress.total_xp || 0,
+          totalDaysClean: progress.total_days_clean || 0,
+        })
+      }
+
+      // Buscar data de início (primeiro dia completado ou data de criação do perfil)
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("start_date, created_at")
+        .eq("id", user.id)
+        .single()
+
+      if (profile?.start_date) {
+        setStartDate(new Date(profile.start_date))
+      } else if (profile?.created_at) {
+        setStartDate(new Date(profile.created_at))
+      } else {
+        // Fallback: usar data atual menos dias limpos
+        const daysAgo = progress?.total_days_clean || 0
+        setStartDate(new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000))
+      }
+    } catch (error) {
+      console.error("Error loading user data:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Weekly check-in data (Mon-first ordering)
   const weekOrder = [1, 2, 3, 4, 5, 6, 0] // Monday to Sunday
@@ -39,12 +107,64 @@ export default function DashboardPage() {
   const todayDow = new Date().getDay()
   const todayPos = weekOrder.indexOf(todayDow)
   
-  // Demo weekly status: 0 = not started, 1 = completed, 2 = failed
-  const weeklyStatus = [1, 2, 1, 1, 2, 1, 2] // M=completed, T=failed, W=completed, etc.
+  // Buscar status semanal real do banco
+  const [weeklyStatus, setWeeklyStatus] = useState<number[]>([0, 0, 0, 0, 0, 0, 0])
+
+  useEffect(() => {
+    loadWeeklyStatus()
+  }, [userProgress])
+
+  const loadWeeklyStatus = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      // Buscar dias completados na última semana
+      const weekAgo = new Date()
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      
+      const { data: completedDays } = await supabase
+        .from("program_days")
+        .select("completed_at, completed")
+        .eq("user_id", user.id)
+        .gte("completed_at", weekAgo.toISOString())
+        .eq("completed", true)
+
+      const status = weekOrder.map((dayOfWeek) => {
+        const targetDate = new Date()
+        const daysFromToday = weekOrder.indexOf(todayDow) - weekOrder.indexOf(dayOfWeek)
+        targetDate.setDate(targetDate.getDate() - daysFromToday)
+        targetDate.setHours(0, 0, 0, 0)
+
+        const wasCompleted = completedDays?.some((day) => {
+          const completedDate = new Date(day.completed_at)
+          completedDate.setHours(0, 0, 0, 0)
+          return completedDate.getTime() === targetDate.getTime()
+        })
+
+        return wasCompleted ? 1 : 0
+      })
+
+      setWeeklyStatus(status)
+    } catch (error) {
+      console.error("Error loading weekly status:", error)
+    }
+  }
 
   const handlePanicButton = () => {
     // TODO: Implementar chamada de vídeo
     console.log("Botão de Pânico clicado")
+  }
+
+  if (isLoading || !startDate) {
+    return (
+      <div className="min-h-screen starry-background flex items-center justify-center">
+        <div className="text-white">Carregando...</div>
+      </div>
+    )
   }
 
   return (
@@ -104,6 +224,21 @@ export default function DashboardPage() {
               <p className="text-white text-sm md:text-lg">{t.youveBeenFree}:</p>
               <TimerDisplay startDate={startDate} />
             </div>
+            {/* Progress Info */}
+            <div className="flex items-center justify-center gap-4 text-sm text-white/70 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Flame className="h-4 w-4 text-[oklch(0.68_0.18_45)]" />
+                <span>{userProgress.currentStreak} {t.days} {t.currentStreak}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Star className="h-4 w-4 text-[oklch(0.68_0.18_45)]" />
+                <span>{userProgress.totalXp} XP</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-[oklch(0.68_0.18_45)]" />
+                <span>{userProgress.currentDay}/90 {t.program}</span>
+              </div>
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -145,6 +280,10 @@ export default function DashboardPage() {
                 className="h-full bg-gradient-to-r from-[oklch(0.7_0.15_220)] to-[oklch(0.54_0.18_285)] rounded-full transition-all duration-500"
                 style={{ width: `${brainProgress}%` }}
               />
+            </div>
+            <div className="flex items-center justify-between text-xs text-white/50">
+              <span>{t.program}: {userProgress.currentDay}/90</span>
+              <span>{language === "pt" ? "Dias Limpos" : "Days Clean"}: {userProgress.totalDaysClean}</span>
             </div>
           </div>
 
@@ -235,7 +374,10 @@ export default function DashboardPage() {
             <p className="text-sm text-white/70 mb-4">{t.meliusDescription}</p>
             
             <div className="relative">
-              <Card className="p-6 bg-gradient-to-br from-blue-900 to-indigo-900 border-white/10 hover:border-blue-400/50 transition-all cursor-pointer group overflow-hidden min-h-[120px]">
+              <Card 
+                onClick={() => router.push("/tony")}
+                className="p-6 bg-gradient-to-br from-blue-900 to-indigo-900 border-white/10 hover:border-blue-400/50 transition-all cursor-pointer group overflow-hidden min-h-[120px]"
+              >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center group-hover:bg-white/90 transition-colors shadow-md">
                     <Plus className="h-6 w-6 text-blue-900" />
