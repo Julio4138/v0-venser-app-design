@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 import { LanguageProvider } from "@/lib/language-context"
 import { SidebarProvider } from "@/lib/sidebar-context"
+import { ToasterProvider } from "@/components/toaster"
 
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
@@ -43,6 +44,7 @@ export default function RootLayout({
         <SidebarProvider>
           <LanguageProvider>{children}</LanguageProvider>
         </SidebarProvider>
+        <ToasterProvider />
         <Analytics />
       </body>
     </html>

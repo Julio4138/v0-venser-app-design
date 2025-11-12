@@ -8,11 +8,27 @@ import { Button } from "@/components/ui/button"
 import { Sparkles, Settings, Crown, LogOut } from "lucide-react"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
+import { supabase } from "@/lib/supabase/client"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
 export default function ProfilePage() {
   const { language } = useLanguage()
   const t = translations[language]
   const { collapsed } = useSidebar()
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      toast.success("Logout realizado com sucesso")
+      router.push("/")
+      router.refresh()
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao fazer logout")
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -63,7 +79,10 @@ export default function ProfilePage() {
               </div>
             </Card>
 
-            <Card className="p-4 hover:border-red-500 transition-all cursor-pointer">
+            <Card 
+              className="p-4 hover:border-red-500 transition-all cursor-pointer"
+              onClick={handleLogout}
+            >
               <div className="flex items-center gap-4">
                 <LogOut className="h-6 w-6 text-red-500" />
                 <span className="font-medium text-red-500">Log Out</span>
