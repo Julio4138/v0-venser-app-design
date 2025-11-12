@@ -8,7 +8,6 @@ import { useLanguage } from "@/lib/language-context"
 import { translations } from "@/lib/translations"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Send, Bot, Sparkles, MessageCircle, Heart } from "lucide-react"
@@ -24,6 +23,7 @@ export default function TonyPage() {
   const { language } = useLanguage()
   const t = translations[language]
   const { collapsed } = useSidebar()
+  const [mounted, setMounted] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -40,6 +40,10 @@ export default function TonyPage() {
   const [isTyping, setIsTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -142,58 +146,58 @@ export default function TonyPage() {
   }
 
   return (
-    <div className="min-h-screen starry-background relative">
+    <div className="min-h-screen starry-background relative flex flex-col">
       <MobileHeader />
       <DesktopSidebar />
 
       <div className={cn(
-        "transition-all duration-300",
-        collapsed ? "md:ml-20 lg:ml-20" : "md:ml-56 lg:ml-64"
+        "transition-all duration-300 flex-1 flex flex-col",
+        mounted && collapsed ? "md:ml-20 lg:ml-20" : "md:ml-56 lg:ml-64"
       )}>
-        <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 md:pt-6 pb-24 md:pb-6">
-          {/* Header Section - Redesenhado */}
-          <div className="mb-6 md:mb-8">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-              {/* Avatar e Título */}
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <div className="h-14 w-14 md:h-16 md:w-16 rounded-2xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] via-[oklch(0.6_0.16_250)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shadow-lg venser-glow transform transition-transform hover:scale-105">
-                    <Bot className="h-7 w-7 md:h-8 md:w-8 text-white" />
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 h-5 w-5 bg-green-500 rounded-full border-2 border-background flex items-center justify-center">
-                    <div className="h-2 w-2 bg-white rounded-full animate-pulse" />
-                  </div>
+        {/* Header fixo no topo */}
+        <header className="sticky top-0 z-10 bg-gradient-to-b from-background/95 via-background/90 to-background/80 backdrop-blur-xl border-b border-white/10 px-4 sm:px-6 lg:px-8 py-4 md:py-5">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="relative">
+                <div className="h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 rounded-2xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] via-[oklch(0.6_0.16_250)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shadow-lg venser-glow">
+                  <Bot className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-white" />
                 </div>
-                <div className="flex-1">
-                  <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1">
-                    {t.tonyChat}
-                  </h1>
-                  <p className="text-sm md:text-base text-white/70 flex items-center gap-2">
-                    <MessageCircle className="h-4 w-4" />
-                    {t.tonyDescription}
-                  </p>
+                <div className="absolute -bottom-1 -right-1 h-4 w-4 sm:h-5 sm:w-5 bg-green-500 rounded-full border-2 border-background flex items-center justify-center">
+                  <div className="h-2 w-2 bg-white rounded-full animate-pulse" />
                 </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white truncate">
+                  {t.tonyChat}
+                </h1>
+                <p className="text-xs sm:text-sm text-white/70 flex items-center gap-1.5 truncate">
+                  <MessageCircle className="h-3 w-3 sm:h-4 sm:w-4 shrink-0" />
+                  <span className="truncate">{t.tonyDescription}</span>
+                </p>
               </div>
             </div>
           </div>
+        </header>
 
-          {/* Chat Container - Redesenhado */}
-          <Card className="p-0 bg-gradient-to-br from-card/80 via-card/60 to-card/40 backdrop-blur-xl border-white/20 shadow-2xl overflow-hidden flex flex-col h-[calc(100vh-220px)] md:h-[calc(100vh-180px)] lg:h-[calc(100vh-160px)]">
-            {/* Messages Area - Melhorado */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 scroll-smooth">
-              {/* Welcome Message com destaque */}
+        {/* Área de mensagens - ocupa todo o espaço disponível */}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+            <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
+              {/* Welcome Message com destaque - apenas desktop */}
               {messages.length === 1 && (
-                <div className="flex flex-col items-center justify-center py-8 text-center space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="h-20 w-20 rounded-3xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shadow-xl">
-                    <Heart className="h-10 w-10 text-white" />
+                <div className="hidden md:block">
+                  <div className="flex flex-col items-center justify-center py-12 sm:py-16 text-center space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-3xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shadow-xl">
+                      <Heart className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
+                    </div>
+                    <p className="text-white/60 text-sm sm:text-base max-w-md px-4">
+                      {language === "pt" 
+                        ? "Inicie uma conversa com o Tony. Ele está aqui para te apoiar em sua jornada."
+                        : language === "es"
+                        ? "Inicia una conversación con Tony. Él está aquí para apoyarte en tu viaje."
+                        : "Start a conversation with Tony. He's here to support you on your journey."}
+                    </p>
                   </div>
-                  <p className="text-white/60 text-sm max-w-md">
-                    {language === "pt" 
-                      ? "Inicie uma conversa com o Tony. Ele está aqui para te apoiar em sua jornada."
-                      : language === "es"
-                      ? "Inicia una conversación con Tony. Él está aquí para apoyarte en tu viaje."
-                      : "Start a conversation with Tony. He's here to support you on your journey."}
-                  </p>
                 </div>
               )}
 
@@ -201,29 +205,29 @@ export default function TonyPage() {
                 <div
                   key={message.id}
                   className={cn(
-                    "flex gap-3 sm:gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300",
+                    "flex gap-2 sm:gap-3 md:gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300",
                     message.sender === "user" ? "justify-end" : "justify-start",
                     index === messages.length - 1 && "animate-in fade-in slide-in-from-bottom-4"
                   )}
                 >
                   {message.sender === "tony" && (
-                    <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shrink-0 shadow-md">
-                      <Bot className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                    <div className="h-8 w-8 sm:h-10 sm:w-10 md:h-11 md:w-11 rounded-xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shrink-0 shadow-md">
+                      <Bot className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
                     </div>
                   )}
                   <div
                     className={cn(
-                      "max-w-[85%] sm:max-w-[75%] md:max-w-[70%] rounded-2xl sm:rounded-3xl px-4 sm:px-5 py-3 sm:py-4 shadow-lg transition-all duration-200",
+                      "max-w-[85%] sm:max-w-[80%] md:max-w-[75%] lg:max-w-[70%] rounded-2xl sm:rounded-3xl px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 md:py-4 shadow-lg transition-all duration-200",
                       message.sender === "user"
                         ? "bg-gradient-to-br from-[oklch(0.54_0.18_285)] via-[oklch(0.6_0.16_250)] to-[oklch(0.7_0.15_220)] text-white"
-                        : "bg-white/15 text-white backdrop-blur-md border border-white/20 hover:bg-white/20"
+                        : "bg-white/10 text-white backdrop-blur-md border border-white/20 hover:bg-white/15"
                     )}
                   >
                     <p className="text-sm sm:text-base md:text-lg leading-relaxed whitespace-pre-wrap break-words">
                       {message.text}
                     </p>
                     <p className={cn(
-                      "text-xs mt-2 sm:mt-3",
+                      "text-[10px] sm:text-xs mt-1.5 sm:mt-2 md:mt-3",
                       message.sender === "user" ? "text-white/70" : "text-white/50"
                     )}>
                       {message.timestamp.toLocaleTimeString(
@@ -236,34 +240,36 @@ export default function TonyPage() {
                     </p>
                   </div>
                   {message.sender === "user" && (
-                    <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center shrink-0 shadow-md">
-                      <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                    <div className="h-8 w-8 sm:h-10 sm:w-10 md:h-11 md:w-11 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center shrink-0 shadow-md">
+                      <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
                     </div>
                   )}
                 </div>
               ))}
               
               {isTyping && (
-                <div className="flex gap-3 sm:gap-4 justify-start animate-in fade-in slide-in-from-bottom-2">
-                  <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shrink-0 shadow-md">
-                    <Bot className="h-5 w-5 sm:h-6 sm:w-6 text-white animate-pulse" />
+                <div className="flex gap-2 sm:gap-3 md:gap-4 justify-start animate-in fade-in slide-in-from-bottom-2">
+                  <div className="h-8 w-8 sm:h-10 sm:w-10 md:h-11 md:w-11 rounded-xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shrink-0 shadow-md">
+                    <Bot className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white animate-pulse" />
                   </div>
-                  <div className="bg-white/15 text-white backdrop-blur-md border border-white/20 rounded-2xl sm:rounded-3xl px-5 py-4 shadow-lg">
-                    <div className="flex gap-2">
-                      <div className="w-2.5 h-2.5 bg-white/70 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                      <div className="w-2.5 h-2.5 bg-white/70 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                      <div className="w-2.5 h-2.5 bg-white/70 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  <div className="bg-white/10 text-white backdrop-blur-md border border-white/20 rounded-2xl sm:rounded-3xl px-4 sm:px-5 py-3 sm:py-4 shadow-lg">
+                    <div className="flex gap-1.5 sm:gap-2">
+                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-white/70 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-white/70 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-white/70 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                     </div>
                   </div>
                 </div>
               )}
               
-              <div ref={messagesEndRef} className="h-4" />
+              <div ref={messagesEndRef} className="h-2 sm:h-4" />
             </div>
+          </div>
 
-            {/* Input Area - Redesenhado */}
-            <div className="border-t border-white/20 bg-gradient-to-b from-white/10 via-white/5 to-transparent backdrop-blur-xl p-4 sm:p-5 lg:p-6">
-              <div className="flex gap-3 sm:gap-4 items-end">
+          {/* Input Area fixo na parte inferior */}
+          <div className="sticky bottom-0 bg-gradient-to-t from-background/95 via-background/90 to-background/80 backdrop-blur-xl border-t border-white/10 px-4 sm:px-6 lg:px-8 py-3 sm:py-4 md:py-5 mb-20 md:mb-0">
+            <div className="max-w-4xl mx-auto">
+              <div className="flex gap-2 sm:gap-3 md:gap-4 items-end">
                 <div className="flex-1 relative">
                   <Input
                     ref={inputRef}
@@ -271,19 +277,19 @@ export default function TonyPage() {
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder={t.typeMessage}
-                    className="w-full h-12 sm:h-14 md:h-16 bg-white/15 border-white/30 text-white placeholder:text-white/50 focus:border-[oklch(0.54_0.18_285)] focus:ring-2 focus:ring-[oklch(0.54_0.18_285)]/50 text-base sm:text-lg rounded-xl sm:rounded-2xl px-4 sm:px-6 backdrop-blur-sm transition-all duration-200 hover:bg-white/20"
+                    className="w-full h-11 sm:h-12 md:h-14 bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-[oklch(0.54_0.18_285)] focus:ring-2 focus:ring-[oklch(0.54_0.18_285)]/50 text-sm sm:text-base md:text-lg rounded-xl sm:rounded-2xl px-3 sm:px-4 md:px-6 backdrop-blur-sm transition-all duration-200 hover:bg-white/15 focus:bg-white/15"
                   />
                 </div>
                 <Button
                   onClick={handleSend}
                   disabled={!inputValue.trim() || isTyping}
                   size="lg"
-                  className="h-12 sm:h-14 md:h-16 w-12 sm:w-14 md:w-16 p-0 bg-gradient-to-br from-[oklch(0.54_0.18_285)] via-[oklch(0.6_0.16_250)] to-[oklch(0.7_0.15_220)] text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl sm:rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 active:scale-95"
+                  className="h-11 sm:h-12 md:h-14 w-11 sm:w-12 md:w-14 p-0 bg-gradient-to-br from-[oklch(0.54_0.18_285)] via-[oklch(0.6_0.16_250)] to-[oklch(0.7_0.15_220)] text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl sm:rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 active:scale-95"
                 >
-                  <Send className="h-5 w-5 sm:h-6 sm:w-6" />
+                  <Send className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6" />
                 </Button>
               </div>
-              <p className="text-xs text-white/40 mt-3 text-center">
+              <p className="text-[10px] sm:text-xs text-white/40 mt-2 sm:mt-3 text-center">
                 {language === "pt" 
                   ? "Pressione Enter para enviar"
                   : language === "es"
@@ -291,7 +297,7 @@ export default function TonyPage() {
                   : "Press Enter to send"}
               </p>
             </div>
-          </Card>
+          </div>
         </main>
       </div>
 

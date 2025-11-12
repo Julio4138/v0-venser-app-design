@@ -41,6 +41,16 @@ export default function DashboardPage() {
     totalDaysClean: 0,
   })
   const [isLoading, setIsLoading] = useState(true)
+  const [quittingReason, setQuittingReason] = useState(() => {
+    // Carrega do localStorage no início se disponível
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('venser.quitting_reason') || ""
+    }
+    return ""
+  })
+  const [isEditingReason, setIsEditingReason] = useState(false)
+  const [isSavingReason, setIsSavingReason] = useState(false)
+  const [reasonSaved, setReasonSaved] = useState(false)
   
   // Estado do timer - controla se está rodando e a data de início
   const [isTimerRunning, setIsTimerRunning] = useState(() => {
@@ -76,6 +86,65 @@ export default function DashboardPage() {
   }
   
   const challengeDay = calculateChallengeDay()
+  
+  // Estado para a data final do desafio
+  const [challengeEndDate, setChallengeEndDate] = useState<string | null>(null)
+  
+  // Função para formatar data em português
+  const formatDatePortuguese = (date: Date): string => {
+    const months = [
+      'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+      'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
+    ]
+    const day = date.getDate()
+    const month = months[date.getMonth()]
+    const year = date.getFullYear()
+    return `${day} de ${month} de ${year}`
+  }
+  
+  // Busca a data de início do usuário e calcula a data final do desafio
+  useEffect(() => {
+    const fetchChallengeEndDate = async () => {
+      try {
+        // Primeiro tenta buscar do localStorage (timerStartDate)
+        let userStartDate: Date | null = null
+        
+        if (startDate) {
+          userStartDate = startDate
+        } else {
+          // Se não houver no localStorage, busca do banco de dados
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('start_date')
+              .eq('id', user.id)
+              .single()
+            
+            if (profile?.start_date) {
+              userStartDate = new Date(profile.start_date)
+            }
+          }
+        }
+        
+        // Se não encontrou data específica, usa a data de exibição padrão
+        const dateToUse = userStartDate || displayStartDate
+        
+        // Calcula a data final (28 dias depois)
+        const endDate = new Date(dateToUse)
+        endDate.setDate(endDate.getDate() + 28) // Desafio de 28 dias
+        setChallengeEndDate(formatDatePortuguese(endDate))
+      } catch (error) {
+        console.error('Erro ao buscar data final do desafio:', error)
+        // Em caso de erro, calcula baseado na data de exibição padrão
+        const endDate = new Date(displayStartDate)
+        endDate.setDate(endDate.getDate() + 28)
+        setChallengeEndDate(formatDatePortuguese(endDate))
+      }
+    }
+    
+    fetchChallengeEndDate()
+  }, [startDate, displayStartDate])
   
   // Calcular progresso do cérebro baseado no dia atual
   const brainProgress = Math.min((userProgress.currentDay / 90) * 100, 100)
@@ -119,12 +188,27 @@ export default function DashboardPage() {
         })
       }
 
-      // Buscar data de início (primeiro dia completado ou data de criação do perfil)
-      const { data: profile } = await supabase
+      // Buscar data de início e motivo (primeiro dia completado ou data de criação do perfil)
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("start_date, created_at")
+        .select("start_date, created_at, quitting_reason")
         .eq("id", user.id)
         .single()
+      
+      // Carrega o motivo do banco ou do localStorage como fallback
+      if (profile?.quitting_reason) {
+        setQuittingReason(profile.quitting_reason)
+        // Sincroniza com localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('venser.quitting_reason', profile.quitting_reason)
+        }
+      } else if (typeof window !== 'undefined') {
+        // Fallback: tenta carregar do localStorage
+        const savedReason = localStorage.getItem('venser.quitting_reason')
+        if (savedReason) {
+          setQuittingReason(savedReason)
+        }
+      }
 
       if (profile?.start_date) {
         setStartDate(new Date(profile.start_date))
@@ -215,6 +299,70 @@ export default function DashboardPage() {
   const handlePanicButton = () => {
     // TODO: Implementar chamada de vídeo
     console.log("Botão de Pânico clicado")
+  }
+
+  const saveQuittingReason = async () => {
+    const reasonToSave = quittingReason.trim()
+    
+    // Salva no localStorage primeiro (sempre funciona)
+    if (typeof window !== 'undefined') {
+      try {
+        if (reasonToSave) {
+          localStorage.setItem('venser.quitting_reason', reasonToSave)
+        } else {
+          localStorage.removeItem('venser.quitting_reason')
+        }
+      } catch (e) {
+        console.error("Error saving to localStorage:", e)
+      }
+    }
+    
+    if (!reasonToSave) {
+      setReasonSaved(false)
+      return
+    }
+    
+    setIsSavingReason(true)
+    setReasonSaved(false)
+    
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser()
+
+      if (authError || !user) {
+        // Se não conseguir autenticar, pelo menos salvou no localStorage
+        setReasonSaved(true)
+        setTimeout(() => setReasonSaved(false), 2000)
+        setIsSavingReason(false)
+        return
+      }
+
+      // Tenta atualizar a coluna quitting_reason no banco
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ quitting_reason: reasonToSave })
+        .eq("id", user.id)
+
+      if (updateError) {
+        // Se falhar, não é crítico pois já salvou no localStorage
+        console.warn("Could not save to database (column may not exist):", updateError.message)
+        // Ainda mostra como salvo pois está no localStorage
+        setReasonSaved(true)
+        setTimeout(() => setReasonSaved(false), 2000)
+      } else {
+        setReasonSaved(true)
+        setTimeout(() => setReasonSaved(false), 2000)
+      }
+    } catch (error) {
+      console.error("Error saving quitting reason:", error)
+      // Mesmo com erro, mostra como salvo pois está no localStorage
+      setReasonSaved(true)
+      setTimeout(() => setReasonSaved(false), 2000)
+    } finally {
+      setIsSavingReason(false)
+    }
   }
 
   // Função para iniciar o timer
@@ -714,7 +862,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs md:text-sm text-white/70">{t.onTrackToQuit}</p>
-                  <p className="text-sm md:text-base lg:text-xl font-bold text-white">20 de Ago de 2025</p>
+                  <p className="text-sm md:text-base lg:text-xl font-bold text-white">
+                    {challengeEndDate || '--'}
+                  </p>
                 </div>
               </div>
             </Card>
@@ -741,9 +891,74 @@ export default function DashboardPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h4 className="font-semibold text-white mb-2">{t.imQuittingBecause}</h4>
-                <p className="text-white/70 text-sm mb-4 cursor-pointer hover:text-white transition-colors">
-                  {t.addReasonPlaceholder}
-                </p>
+                {isEditingReason ? (
+                  <div className="space-y-3 mb-4">
+                    <textarea
+                      value={quittingReason}
+                      onChange={(e) => setQuittingReason(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          setIsEditingReason(false)
+                        }
+                      }}
+                      onBlur={async () => {
+                        // Pequeno delay para permitir clicar no botão salvar
+                        setTimeout(async () => {
+                          setIsEditingReason(false)
+                          if (quittingReason.trim()) {
+                            await saveQuittingReason()
+                          }
+                        }, 200)
+                      }}
+                      placeholder={t.addReasonPlaceholder}
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/50 resize-none min-h-[80px]"
+                      autoFocus
+                      rows={3}
+                    />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async (e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setIsEditingReason(false)
+                            if (quittingReason.trim()) {
+                              await saveQuittingReason()
+                            }
+                          }}
+                          className="text-xs text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded hover:bg-blue-400/10"
+                        >
+                          {isSavingReason ? (language === "pt" ? "Salvando..." : language === "es" ? "Guardando..." : "Saving...") : (language === "pt" ? "Salvar" : language === "es" ? "Guardar" : "Save")}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setIsEditingReason(false)
+                          }}
+                          className="text-xs text-white/50 hover:text-white/70 transition-colors px-2 py-1 rounded hover:bg-white/5"
+                        >
+                          {language === "pt" ? "Cancelar" : language === "es" ? "Cancelar" : "Cancel"}
+                        </button>
+                      </div>
+                      {reasonSaved && (
+                        <span className="text-xs text-green-400 flex items-center gap-1 animate-in fade-in">
+                          <Check className="h-3 w-3" />
+                          {language === "pt" ? "Salvo" : language === "es" ? "Guardado" : "Saved"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    onClick={() => setIsEditingReason(true)}
+                    className="text-white/70 text-sm mb-4 cursor-pointer hover:text-white transition-colors min-h-[60px] whitespace-pre-wrap break-words p-2 -m-2 rounded hover:bg-white/5"
+                  >
+                    {quittingReason || (
+                      <span className="italic text-white/50">{t.addReasonPlaceholder}</span>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-center justify-end gap-1 text-xs text-white/60">
                   <Star className="h-3 w-3" />
                   <span>{t.best} 19m</span>
