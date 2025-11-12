@@ -105,3 +105,5 @@ Se ainda não funcionou:
 2. Verifique se todas as tabelas aparecem no Table Editor
 3. Tente executar o SQL em partes menores
 
+
+

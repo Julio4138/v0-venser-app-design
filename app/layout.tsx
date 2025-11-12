@@ -6,6 +6,7 @@ import "./globals.css"
 import { LanguageProvider } from "@/lib/language-context"
 import { SidebarProvider } from "@/lib/sidebar-context"
 import { ToasterProvider } from "@/components/toaster"
+import { ForceReload } from "@/components/force-reload"
 
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
@@ -14,6 +15,10 @@ export const metadata: Metadata = {
   title: "VENSER - Mental Reprogramming",
   description: "Post-pornography recovery and mental reprogramming based on neuroscience",
   generator: "v0.app",
+  // Adiciona versão para forçar atualização do cache do navegador
+  other: {
+    'version': process.env.NEXT_PUBLIC_APP_VERSION || new Date().toISOString(),
+  },
   icons: {
     icon: [
       {
@@ -46,6 +51,7 @@ export default function RootLayout({
         </SidebarProvider>
         <ToasterProvider />
         <Analytics />
+        <ForceReload />
       </body>
     </html>
   )

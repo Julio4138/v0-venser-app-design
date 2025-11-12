@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ProgressRing } from "@/components/progress-ring"
 import { TreeOfLife } from "@/components/tree-of-life"
 import { TimerDisplay } from "@/components/timer-display"
@@ -22,6 +22,7 @@ import { useContentBlocker } from "@/lib/use-content-blocker"
 import Link from "next/link"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
+import { supabase } from "@/lib/supabase/client"
 
 export default function DashboardPage() {
   const { language } = useLanguage()
@@ -65,6 +66,65 @@ export default function DashboardPage() {
   }
   
   const challengeDay = calculateChallengeDay()
+  
+  // Estado para a data final do desafio
+  const [challengeEndDate, setChallengeEndDate] = useState<string | null>(null)
+  
+  // Função para formatar data em português
+  const formatDatePortuguese = (date: Date): string => {
+    const months = [
+      'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+      'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
+    ]
+    const day = date.getDate()
+    const month = months[date.getMonth()]
+    const year = date.getFullYear()
+    return `${day} de ${month} de ${year}`
+  }
+  
+  // Busca a data de início do usuário e calcula a data final do desafio
+  useEffect(() => {
+    const fetchChallengeEndDate = async () => {
+      try {
+        // Primeiro tenta buscar do localStorage (timerStartDate)
+        let userStartDate: Date | null = null
+        
+        if (startDate) {
+          userStartDate = startDate
+        } else {
+          // Se não houver no localStorage, busca do banco de dados
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('start_date')
+              .eq('id', user.id)
+              .single()
+            
+            if (profile?.start_date) {
+              userStartDate = new Date(profile.start_date)
+            }
+          }
+        }
+        
+        // Se não encontrou data específica, usa a data de exibição padrão
+        const dateToUse = userStartDate || displayStartDate
+        
+        // Calcula a data final (28 dias depois)
+        const endDate = new Date(dateToUse)
+        endDate.setDate(endDate.getDate() + 28) // Desafio de 28 dias
+        setChallengeEndDate(formatDatePortuguese(endDate))
+      } catch (error) {
+        console.error('Erro ao buscar data final do desafio:', error)
+        // Em caso de erro, calcula baseado na data de exibição padrão
+        const endDate = new Date(displayStartDate)
+        endDate.setDate(endDate.getDate() + 28)
+        setChallengeEndDate(formatDatePortuguese(endDate))
+      }
+    }
+    
+    fetchChallengeEndDate()
+  }, [startDate, displayStartDate])
   
   // Demo data - in production this would come from a database
   const currentDay = 14
@@ -597,7 +657,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs md:text-sm text-white/70">{t.onTrackToQuit}</p>
-                  <p className="text-sm md:text-base lg:text-xl font-bold text-white">20 de Ago de 2025</p>
+                  <p className="text-sm md:text-base lg:text-xl font-bold text-white">
+                    {challengeEndDate || '--'}
+                  </p>
                 </div>
               </div>
             </Card>
