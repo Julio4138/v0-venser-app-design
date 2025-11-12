@@ -18,7 +18,11 @@ import {
   UserX,
   Sparkles,
   Loader2,
-  ArrowRight
+  ArrowRight,
+  Settings,
+  BookOpen,
+  Shield,
+  Bot
 } from "lucide-react"
 import Link from "next/link"
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
@@ -323,6 +327,137 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        {/* Admin Panels Navigation - Destaque Principal */}
+        <Card className="p-6 border-2">
+          <div className="mb-6">
+            <h3 className="text-2xl font-bold mb-2">Painéis Administrativos</h3>
+            <p className="text-muted-foreground">
+              Acesse rapidamente todos os painéis de gerenciamento do sistema
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            {/* Gerenciar Usuários */}
+            <Link href="/admin/users">
+              <Card className="p-6 hover:shadow-xl transition-all cursor-pointer border-2 hover:border-blue-500 group h-full">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Users className="h-7 w-7 text-white" />
+                    </div>
+                    <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-lg mb-1">Gerenciar Usuários</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Controle de acessos, permissões e perfis de usuários
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-blue-600 font-medium">
+                    <span>Acessar</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </div>
+                </div>
+              </Card>
+            </Link>
+
+            {/* Controlar Funcionalidades */}
+            <Link href="/admin/features">
+              <Card className="p-6 hover:shadow-xl transition-all cursor-pointer border-2 hover:border-purple-500 group h-full">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Settings className="h-7 w-7 text-white" />
+                    </div>
+                    <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-purple-500 group-hover:translate-x-1 transition-all" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-lg mb-1">Funcionalidades</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Habilite ou desabilite funcionalidades do aplicativo
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-purple-600 font-medium">
+                    <span>Acessar</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </div>
+                </div>
+              </Card>
+            </Link>
+
+            {/* Analytics */}
+            <Link href="/admin/analytics">
+              <Card className="p-6 hover:shadow-xl transition-all cursor-pointer border-2 hover:border-green-500 group h-full">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <BarChart3 className="h-7 w-7 text-white" />
+                    </div>
+                    <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-green-500 group-hover:translate-x-1 transition-all" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-lg mb-1">Analytics</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Métricas detalhadas e estatísticas do sistema
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
+                    <span>Acessar</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </div>
+                </div>
+              </Card>
+            </Link>
+
+            {/* Gerenciar Programa */}
+            <Link href="/admin/program">
+              <Card className="p-6 hover:shadow-xl transition-all cursor-pointer border-2 hover:border-orange-500 group h-full">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <BookOpen className="h-7 w-7 text-white" />
+                    </div>
+                    <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-orange-500 group-hover:translate-x-1 transition-all" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-lg mb-1">Programa de 90 Dias</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Gerencie templates, conteúdos e tarefas do programa
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-orange-600 font-medium">
+                    <span>Acessar</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </div>
+                </div>
+              </Card>
+            </Link>
+
+            {/* Agente IA Tony */}
+            <Link href="/admin/ai-agent">
+              <Card className="p-6 hover:shadow-xl transition-all cursor-pointer border-2 hover:border-cyan-500 group h-full">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Bot className="h-7 w-7 text-white" />
+                    </div>
+                    <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-cyan-500 group-hover:translate-x-1 transition-all" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-lg mb-1">Agente IA - Tony</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Configure comportamento, personalidade e base de conhecimento
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-cyan-600 font-medium">
+                    <span>Acessar</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </div>
+                </div>
+              </Card>
+            </Link>
+          </div>
+        </Card>
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {statCards.map((stat, index) => {
@@ -441,30 +576,6 @@ export default function AdminDashboard() {
           </div>
         </Card>
 
-        {/* Quick Actions */}
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Ações Rápidas</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link href="/admin/users">
-              <Button variant="outline" className="w-full justify-start">
-                <Users className="h-4 w-4 mr-2" />
-                Gerenciar Usuários
-              </Button>
-            </Link>
-            <Link href="/admin/features">
-              <Button variant="outline" className="w-full justify-start">
-                <Target className="h-4 w-4 mr-2" />
-                Controlar Funcionalidades
-              </Button>
-            </Link>
-            <Link href="/admin/program">
-              <Button variant="outline" className="w-full justify-start">
-                <Calendar className="h-4 w-4 mr-2" />
-                Gerenciar Programa
-              </Button>
-            </Link>
-          </div>
-        </Card>
       </div>
     </div>
   )

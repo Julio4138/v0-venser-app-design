@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { ProgressRing } from "@/components/progress-ring"
 import { TreeOfLife } from "@/components/tree-of-life"
 import { TimerDisplay } from "@/components/timer-display"
@@ -13,7 +14,7 @@ import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
-import { Hand, Brain, RotateCcw, MoreHorizontal, Sparkles, AlertCircle, Check, X, Minus, Cloud, Plus, Flower2, Bell, TreePine, MessageCircle, Globe, SquarePlus, Circle, HelpCircle, Star, ChevronRight, Heart, BookOpen, Smile, Users, Target, RotateCw, ClipboardList, Wind, Award, Quote, Play, Pause } from "lucide-react"
+import { Hand, Brain, RotateCcw, MoreHorizontal, Sparkles, AlertCircle, Check, X, Minus, Cloud, Plus, Flower2, Bell, TreePine, MessageCircle, Globe, SquarePlus, Circle, HelpCircle, Star, ChevronRight, Heart, BookOpen, Smile, Users, Target, RotateCw, ClipboardList, Wind, Award, Quote, Flame, Play, Pause } from "lucide-react"
 import { PeacefulAnimation } from "@/components/peaceful-animation"
 import { TreeForest } from "@/components/tree-forest"
 import { useTreeProgress } from "@/lib/use-tree-progress"
@@ -28,9 +29,28 @@ export default function DashboardPage() {
   const { language } = useLanguage()
   const t = translations[language]
   const { collapsed } = useSidebar()
+  const router = useRouter()
   const treeProgress = useTreeProgress()
   const notifications = useNotifications()
   const contentBlocker = useContentBlocker()
+  
+  const [userProgress, setUserProgress] = useState({
+    currentDay: 0,
+    currentStreak: 0,
+    totalXp: 0,
+    totalDaysClean: 0,
+  })
+  const [isLoading, setIsLoading] = useState(true)
+  const [quittingReason, setQuittingReason] = useState(() => {
+    // Carrega do localStorage no início se disponível
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('venser.quitting_reason') || ""
+    }
+    return ""
+  })
+  const [isEditingReason, setIsEditingReason] = useState(false)
+  const [isSavingReason, setIsSavingReason] = useState(false)
+  const [reasonSaved, setReasonSaved] = useState(false)
   
   // Estado do timer - controla se está rodando e a data de início
   const [isTimerRunning, setIsTimerRunning] = useState(() => {
@@ -126,12 +146,94 @@ export default function DashboardPage() {
     fetchChallengeEndDate()
   }, [startDate, displayStartDate])
   
-  // Demo data - in production this would come from a database
-  const currentDay = 14
-  const brainProgress = Math.min((currentDay / 90) * 100, 100)
+  // Calcular progresso do cérebro baseado no dia atual
+  const brainProgress = Math.min((userProgress.currentDay / 90) * 100, 100)
   
   // Analytics data
   const analyticsData = [60, 65, 70, 68, 75, 80, 82, 78, 85, 88, 85, 90]
+
+  // Carregar dados do usuário
+  useEffect(() => {
+    loadUserData()
+    
+    // Atualizar a cada 30 segundos para refletir mudanças
+    const interval = setInterval(loadUserData, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const loadUserData = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        setIsLoading(false)
+        return
+      }
+
+      // Buscar progresso do usuário
+      const { data: progress } = await supabase
+        .from("user_progress")
+        .select("*")
+        .eq("user_id", user.id)
+        .single()
+
+      if (progress) {
+        setUserProgress({
+          currentDay: progress.current_day || 0,
+          currentStreak: progress.current_streak || 0,
+          totalXp: progress.total_xp || 0,
+          totalDaysClean: progress.total_days_clean || 0,
+        })
+      }
+
+      // Buscar data de início e motivo (primeiro dia completado ou data de criação do perfil)
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("start_date, created_at, quitting_reason")
+        .eq("id", user.id)
+        .single()
+      
+      // Carrega o motivo do banco ou do localStorage como fallback
+      if (profile?.quitting_reason) {
+        setQuittingReason(profile.quitting_reason)
+        // Sincroniza com localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('venser.quitting_reason', profile.quitting_reason)
+        }
+      } else if (typeof window !== 'undefined') {
+        // Fallback: tenta carregar do localStorage
+        const savedReason = localStorage.getItem('venser.quitting_reason')
+        if (savedReason) {
+          setQuittingReason(savedReason)
+        }
+      }
+
+      if (profile?.start_date) {
+        setStartDate(new Date(profile.start_date))
+        setIsTimerRunning(true)
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('timerStartDate', new Date(profile.start_date).toISOString())
+        }
+      } else if (profile?.created_at) {
+        setStartDate(new Date(profile.created_at))
+        setIsTimerRunning(true)
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('timerStartDate', new Date(profile.created_at).toISOString())
+        }
+      } else if (!startDate) {
+        // Fallback: usar data atual menos dias limpos
+        const daysAgo = progress?.total_days_clean || 0
+        const fallbackDate = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+        setStartDate(fallbackDate)
+      }
+    } catch (error) {
+      console.error("Error loading user data:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Weekly check-in data (Sun-first ordering)
   const weekOrder = [0, 1, 2, 3, 4, 5, 6] // Sunday to Saturday (Domingo to Sábado)
@@ -139,55 +241,128 @@ export default function DashboardPage() {
   const todayDow = new Date().getDay()
   const todayPos = weekOrder.indexOf(todayDow)
   
-  // Função para calcular o status de cada dia da semana baseado na jornada
-  const getWeeklyStatusFromJourney = () => {
-    // TODO: Em produção, buscar dados reais do Supabase (program_days)
-    // Por enquanto, usando dados mockados que simulam a jornada
-    
-    // Se não houver startDate, retorna todos como não iniciados
-    if (!startDate) {
-      return weekOrder.map(() => 0)
+  // Buscar status semanal real do banco
+  const [weeklyStatus, setWeeklyStatus] = useState<number[]>([0, 0, 0, 0, 0, 0, 0])
+
+  useEffect(() => {
+    loadWeeklyStatus()
+  }, [userProgress, startDate])
+
+  const loadWeeklyStatus = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      // Buscar dias completados na última semana
+      const weekAgo = new Date()
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      
+      const { data: completedDays } = await supabase
+        .from("program_days")
+        .select("completed_at, completed")
+        .eq("user_id", user.id)
+        .gte("completed_at", weekAgo.toISOString())
+        .eq("completed", true)
+
+      const status = weekOrder.map((dayOfWeek, idx) => {
+        const today = new Date()
+        const sunday = new Date(today)
+        sunday.setDate(today.getDate() - today.getDay())
+        sunday.setHours(0, 0, 0, 0)
+        
+        const dayDate = new Date(sunday)
+        dayDate.setDate(sunday.getDate() + idx)
+        dayDate.setHours(0, 0, 0, 0)
+
+        if (dayDate > today) {
+          return 0 // Future day
+        }
+
+        const wasCompleted = completedDays?.some((day) => {
+          const completedDate = new Date(day.completed_at)
+          completedDate.setHours(0, 0, 0, 0)
+          return completedDate.getTime() === dayDate.getTime()
+        })
+
+        return wasCompleted ? 1 : (dayDate < today ? 2 : 0)
+      })
+
+      setWeeklyStatus(status)
+    } catch (error) {
+      console.error("Error loading weekly status:", error)
     }
-    
-    // Calcula o início da semana (domingo)
-    const today = new Date()
-    const sunday = new Date(today)
-    sunday.setDate(today.getDate() - today.getDay()) // Volta para o domingo
-    sunday.setHours(0, 0, 0, 0)
-    
-    // Calcula quantos dias se passaram desde o início da jornada
-    const daysSinceStart = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-    
-    // Para cada dia da semana, verifica se foi concluído na jornada
-    return weekOrder.map((dayOfWeek, idx) => {
-      const dayDate = new Date(sunday)
-      dayDate.setDate(sunday.getDate() + idx)
-      
-      // Calcula qual dia do programa corresponde a esta data
-      const programDay = Math.floor((dayDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
-      
-      // Se o dia ainda não chegou, retorna 0 (not started)
-      if (dayDate > today) {
-        return 0
-      }
-      
-      // Se o dia já passou, verifica se foi concluído
-      // TODO: Substituir por busca real no Supabase:
-      // const dayData = await supabase.from('program_days').select('completed').eq('day_number', programDay).single()
-      // return dayData?.completed ? 1 : 2
-      
-      // Mock: Simula que alguns dias foram concluídos e outros não
-      // Em produção, isso virá do banco de dados
-      const mockCompletedDays = [1, 2, 3, 5, 7, 10, 12, 14] // Dias concluídos (mock)
-      return mockCompletedDays.includes(programDay) ? 1 : (programDay > 0 ? 2 : 0)
-    })
   }
-  
-  const weeklyStatus = getWeeklyStatusFromJourney()
 
   const handlePanicButton = () => {
     // TODO: Implementar chamada de vídeo
     console.log("Botão de Pânico clicado")
+  }
+
+  const saveQuittingReason = async () => {
+    const reasonToSave = quittingReason.trim()
+    
+    // Salva no localStorage primeiro (sempre funciona)
+    if (typeof window !== 'undefined') {
+      try {
+        if (reasonToSave) {
+          localStorage.setItem('venser.quitting_reason', reasonToSave)
+        } else {
+          localStorage.removeItem('venser.quitting_reason')
+        }
+      } catch (e) {
+        console.error("Error saving to localStorage:", e)
+      }
+    }
+    
+    if (!reasonToSave) {
+      setReasonSaved(false)
+      return
+    }
+    
+    setIsSavingReason(true)
+    setReasonSaved(false)
+    
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser()
+
+      if (authError || !user) {
+        // Se não conseguir autenticar, pelo menos salvou no localStorage
+        setReasonSaved(true)
+        setTimeout(() => setReasonSaved(false), 2000)
+        setIsSavingReason(false)
+        return
+      }
+
+      // Tenta atualizar a coluna quitting_reason no banco
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ quitting_reason: reasonToSave })
+        .eq("id", user.id)
+
+      if (updateError) {
+        // Se falhar, não é crítico pois já salvou no localStorage
+        console.warn("Could not save to database (column may not exist):", updateError.message)
+        // Ainda mostra como salvo pois está no localStorage
+        setReasonSaved(true)
+        setTimeout(() => setReasonSaved(false), 2000)
+      } else {
+        setReasonSaved(true)
+        setTimeout(() => setReasonSaved(false), 2000)
+      }
+    } catch (error) {
+      console.error("Error saving quitting reason:", error)
+      // Mesmo com erro, mostra como salvo pois está no localStorage
+      setReasonSaved(true)
+      setTimeout(() => setReasonSaved(false), 2000)
+    } finally {
+      setIsSavingReason(false)
+    }
   }
 
   // Função para iniciar o timer
@@ -244,6 +419,14 @@ export default function DashboardPage() {
     // Reseta o estado
     setStartDate(null)
     setIsTimerRunning(false)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen starry-background flex items-center justify-center">
+        <div className="text-white">Carregando...</div>
+      </div>
+    )
   }
 
   return (
@@ -303,6 +486,21 @@ export default function DashboardPage() {
               <p className="text-white text-sm md:text-lg">{t.youveBeenFree}:</p>
               <TimerDisplay startDate={startDate} />
             </div>
+            {/* Progress Info */}
+            <div className="flex items-center justify-center gap-4 text-sm text-white/70 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Flame className="h-4 w-4 text-[oklch(0.68_0.18_45)]" />
+                <span>{userProgress.currentStreak} {t.days} {t.currentStreak}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Star className="h-4 w-4 text-[oklch(0.68_0.18_45)]" />
+                <span>{userProgress.totalXp} XP</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-[oklch(0.68_0.18_45)]" />
+                <span>{userProgress.currentDay}/90 {t.program}</span>
+              </div>
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -361,6 +559,10 @@ export default function DashboardPage() {
                 className="h-full bg-gradient-to-r from-[oklch(0.7_0.15_220)] to-[oklch(0.54_0.18_285)] rounded-full transition-all duration-500"
                 style={{ width: `${brainProgress}%` }}
               />
+            </div>
+            <div className="flex items-center justify-between text-xs text-white/50">
+              <span>{t.program}: {userProgress.currentDay}/90</span>
+              <span>{language === "pt" ? "Dias Limpos" : "Days Clean"}: {userProgress.totalDaysClean}</span>
             </div>
           </div>
 
@@ -467,7 +669,10 @@ export default function DashboardPage() {
             <p className="text-sm text-white/70 mb-4">{t.meliusDescription}</p>
             
             <div className="relative">
-              <Card className="p-6 bg-gradient-to-br from-blue-900 to-indigo-900 border-white/10 hover:border-blue-400/50 transition-all cursor-pointer group overflow-hidden min-h-[120px]">
+              <Card 
+                onClick={() => router.push("/tony")}
+                className="p-6 bg-gradient-to-br from-blue-900 to-indigo-900 border-white/10 hover:border-blue-400/50 transition-all cursor-pointer group overflow-hidden min-h-[120px]"
+              >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center group-hover:bg-white/90 transition-colors shadow-md">
                     <Plus className="h-6 w-6 text-blue-900" />
@@ -686,9 +891,74 @@ export default function DashboardPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h4 className="font-semibold text-white mb-2">{t.imQuittingBecause}</h4>
-                <p className="text-white/70 text-sm mb-4 cursor-pointer hover:text-white transition-colors">
-                  {t.addReasonPlaceholder}
-                </p>
+                {isEditingReason ? (
+                  <div className="space-y-3 mb-4">
+                    <textarea
+                      value={quittingReason}
+                      onChange={(e) => setQuittingReason(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          setIsEditingReason(false)
+                        }
+                      }}
+                      onBlur={async () => {
+                        // Pequeno delay para permitir clicar no botão salvar
+                        setTimeout(async () => {
+                          setIsEditingReason(false)
+                          if (quittingReason.trim()) {
+                            await saveQuittingReason()
+                          }
+                        }, 200)
+                      }}
+                      placeholder={t.addReasonPlaceholder}
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/50 resize-none min-h-[80px]"
+                      autoFocus
+                      rows={3}
+                    />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async (e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setIsEditingReason(false)
+                            if (quittingReason.trim()) {
+                              await saveQuittingReason()
+                            }
+                          }}
+                          className="text-xs text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded hover:bg-blue-400/10"
+                        >
+                          {isSavingReason ? (language === "pt" ? "Salvando..." : language === "es" ? "Guardando..." : "Saving...") : (language === "pt" ? "Salvar" : language === "es" ? "Guardar" : "Save")}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setIsEditingReason(false)
+                          }}
+                          className="text-xs text-white/50 hover:text-white/70 transition-colors px-2 py-1 rounded hover:bg-white/5"
+                        >
+                          {language === "pt" ? "Cancelar" : language === "es" ? "Cancelar" : "Cancel"}
+                        </button>
+                      </div>
+                      {reasonSaved && (
+                        <span className="text-xs text-green-400 flex items-center gap-1 animate-in fade-in">
+                          <Check className="h-3 w-3" />
+                          {language === "pt" ? "Salvo" : language === "es" ? "Guardado" : "Saved"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    onClick={() => setIsEditingReason(true)}
+                    className="text-white/70 text-sm mb-4 cursor-pointer hover:text-white transition-colors min-h-[60px] whitespace-pre-wrap break-words p-2 -m-2 rounded hover:bg-white/5"
+                  >
+                    {quittingReason || (
+                      <span className="italic text-white/50">{t.addReasonPlaceholder}</span>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-center justify-end gap-1 text-xs text-white/60">
                   <Star className="h-3 w-3" />
                   <span>{t.best} 19m</span>

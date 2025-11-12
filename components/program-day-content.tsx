@@ -24,13 +24,14 @@ export function ProgramDayContent({
 }: ProgramDayContentProps) {
   return (
     <div className="space-y-4">
-      {/* Title */}
-      <div>
-        <h2 className="text-2xl font-bold">{title}</h2>
-        {motivationalQuote && (
-          <p className="mt-2 text-muted-foreground italic">"{motivationalQuote}"</p>
-        )}
-      </div>
+      {/* Motivational Quote */}
+      {motivationalQuote && (
+        <div className="p-4 rounded-lg bg-gradient-to-r from-[oklch(0.54_0.18_285)]/20 to-[oklch(0.7_0.15_220)]/20 border border-white/10">
+          <p className="text-sm md:text-base text-foreground italic leading-relaxed text-center">
+            "{motivationalQuote}"
+          </p>
+        </div>
+      )}
 
       {/* Text Content */}
       {contentText && (
