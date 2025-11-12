@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { MobileNav } from "@/components/mobile-nav"
 import { MobileHeader } from "@/components/mobile-header"
 import { DesktopSidebar } from "@/components/desktop-sidebar"
@@ -11,11 +11,28 @@ import { useLanguage } from "@/lib/language-context"
 import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Flame, Trophy, Brain, Zap, Award, Check, TreePine } from "lucide-react"
+import { Flame, Trophy, Brain, Zap, Award, Check, TreePine, Calendar, Target, CheckSquare, AlertTriangle, Smile, TrendingUp } from "lucide-react"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
 import { TreeForest } from "@/components/tree-forest"
 import { useTreeProgress } from "@/lib/use-tree-progress"
+import { supabase } from "@/lib/supabase/client"
+
+interface PlannerMetrics {
+  totalDays: number
+  daysWithGoal: number
+  totalTasks: number
+  completedTasks: number
+  totalTriggers: number
+  triggersByIntensity: {
+    leve: number
+    moderado: number
+    forte: number
+  }
+  moodDistribution: Record<string, number>
+  plannerUsageData: number[]
+  topTriggers: Array<{ text: string; count: number; intensity: string }>
+}
 
 export default function AnalyticsPage() {
   const { language } = useLanguage()
@@ -23,6 +40,8 @@ export default function AnalyticsPage() {
   const t = translations[language]
   const { collapsed } = useSidebar()
   const treeProgress = useTreeProgress()
+  const [plannerMetrics, setPlannerMetrics] = useState<PlannerMetrics | null>(null)
+  const [isLoadingPlanner, setIsLoadingPlanner] = useState(true)
 
   // Demo data
   const recoveryScore = 78
@@ -40,6 +59,126 @@ export default function AnalyticsPage() {
     { id: 3, title: t.oneMonth, days: 30, achieved: false },
     { id: 4, title: t.threeMonths, days: 90, achieved: false },
   ]
+
+  // Load planner metrics
+  useEffect(() => {
+    loadPlannerMetrics()
+  }, [period])
+
+  const loadPlannerMetrics = async () => {
+    try {
+      setIsLoadingPlanner(true)
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      // Calculate date range based on period
+      const now = new Date()
+      let startDate: Date
+      if (period === "week") {
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      } else if (period === "month") {
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      } else {
+        startDate = new Date(0) // All time
+      }
+
+      const { data: plannerEntries, error } = await supabase
+        .from("daily_planner")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("planner_date", startDate.toISOString().split("T")[0])
+        .order("planner_date", { ascending: true })
+
+      if (error) throw error
+
+      if (!plannerEntries || plannerEntries.length === 0) {
+        setPlannerMetrics(null)
+        setIsLoadingPlanner(false)
+        return
+      }
+
+      // Calculate metrics
+      const totalDays = plannerEntries.length
+      const daysWithGoal = plannerEntries.filter((e) => e.daily_goal).length
+
+      let totalTasks = 0
+      let completedTasks = 0
+      let totalTriggers = 0
+      const triggersByIntensity = { leve: 0, moderado: 0, forte: 0 }
+      const moodDistribution: Record<string, number> = {}
+      const triggerCounts: Record<string, { count: number; intensity: string }> = {}
+
+      // Process each entry
+      plannerEntries.forEach((entry) => {
+        // Tasks
+        if (entry.tasks && Array.isArray(entry.tasks)) {
+          totalTasks += entry.tasks.length
+          completedTasks += entry.tasks.filter((t: any) => t.completed).length
+        }
+
+        // Triggers
+        if (entry.triggers && Array.isArray(entry.triggers)) {
+          totalTriggers += entry.triggers.length
+          entry.triggers.forEach((trigger: any) => {
+            if (trigger.intensity) {
+              triggersByIntensity[trigger.intensity as keyof typeof triggersByIntensity]++
+            }
+            // Count trigger frequency
+            const key = trigger.text?.toLowerCase().trim() || ""
+            if (key) {
+              if (!triggerCounts[key]) {
+                triggerCounts[key] = { count: 0, intensity: trigger.intensity || "leve" }
+              }
+              triggerCounts[key].count++
+            }
+          })
+        }
+
+        // Mood
+        if (entry.mood) {
+          moodDistribution[entry.mood] = (moodDistribution[entry.mood] || 0) + 1
+        }
+      })
+
+      // Get top triggers
+      const topTriggers = Object.entries(triggerCounts)
+        .map(([text, data]) => ({ text, ...data }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
+
+      // Calculate planner usage over time (last 7/30 days)
+      const daysToShow = period === "week" ? 7 : period === "month" ? 30 : Math.min(30, totalDays)
+      const plannerUsageData: number[] = []
+      const today = new Date()
+      
+      for (let i = daysToShow - 1; i >= 0; i--) {
+        const date = new Date(today)
+        date.setDate(date.getDate() - i)
+        const dateStr = date.toISOString().split("T")[0]
+        const hasEntry = plannerEntries.some((e) => e.planner_date === dateStr)
+        plannerUsageData.push(hasEntry ? 1 : 0)
+      }
+
+      setPlannerMetrics({
+        totalDays,
+        daysWithGoal,
+        totalTasks,
+        completedTasks,
+        totalTriggers,
+        triggersByIntensity,
+        moodDistribution,
+        plannerUsageData,
+        topTriggers,
+      })
+    } catch (error) {
+      console.error("Error loading planner metrics:", error)
+    } finally {
+      setIsLoadingPlanner(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -212,6 +351,361 @@ export default function AnalyticsPage() {
                 </Card>
               ))}
             </div>
+          </Card>
+
+          {/* Planner Metrics Section */}
+          <Card className="p-4 md:p-6 lg:p-8 venser-card-glow bg-gradient-to-br from-[oklch(0.54_0.18_285)]/5 to-[oklch(0.7_0.15_220)]/5 border-[oklch(0.54_0.18_285)]/20">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 md:mb-8">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shrink-0">
+                  <Calendar className="h-5 w-5 md:h-6 md:w-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg md:text-xl lg:text-2xl font-bold">
+                    {language === "pt" ? "Métricas do Planner" : language === "es" ? "Métricas del Planificador" : "Planner Metrics"}
+                  </h3>
+                  <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
+                    {language === "pt" 
+                      ? "Análise completa do seu planejamento diário" 
+                      : language === "es"
+                        ? "Análisis completo de tu planificación diaria"
+                        : "Complete analysis of your daily planning"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {isLoadingPlanner ? (
+              <div className="flex flex-col items-center justify-center py-12 md:py-16">
+                <div className="animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-[oklch(0.54_0.18_285)] mb-4"></div>
+                <p className="text-sm md:text-base text-muted-foreground">
+                  {language === "pt" ? "Carregando métricas..." : language === "es" ? "Cargando métricas..." : "Loading metrics..."}
+                </p>
+              </div>
+            ) : !plannerMetrics ? (
+              <div className="flex flex-col items-center justify-center py-12 md:py-16 text-center">
+                <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+                  <Calendar className="h-8 w-8 md:h-10 md:w-10 text-muted-foreground" />
+                </div>
+                <p className="text-sm md:text-base text-muted-foreground max-w-md">
+                  {language === "pt" 
+                    ? "Nenhum dado do planner encontrado para este período. Comece a usar o planner para ver suas métricas aqui!" 
+                    : language === "es"
+                      ? "No se encontraron datos del planificador para este período. ¡Comienza a usar el planificador para ver tus métricas aquí!"
+                      : "No planner data found for this period. Start using the planner to see your metrics here!"}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6 md:space-y-8">
+                {/* Planner Stats Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                  <Card className="p-4 md:p-5 bg-gradient-to-br from-[oklch(0.54_0.18_285)]/10 to-[oklch(0.54_0.18_285)]/5 border-[oklch(0.54_0.18_285)]/30 hover:border-[oklch(0.54_0.18_285)]/50 transition-all group">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-2 flex-1 min-w-0">
+                        <p className="text-xs md:text-sm text-muted-foreground font-medium">
+                          {language === "pt" ? "Dias com Planner" : language === "es" ? "Días con Planificador" : "Days with Planner"}
+                        </p>
+                        <p className="text-2xl md:text-3xl font-bold text-[oklch(0.54_0.18_285)]">
+                          {plannerMetrics.totalDays}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {language === "pt" ? "registros no período" : language === "es" ? "registros en el período" : "records in period"}
+                        </p>
+                      </div>
+                      <div className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.54_0.18_285)]/70 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                        <Calendar className="h-5 w-5 md:h-6 md:w-6 text-white" />
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="p-4 md:p-5 bg-gradient-to-br from-[oklch(0.7_0.15_220)]/10 to-[oklch(0.7_0.15_220)]/5 border-[oklch(0.7_0.15_220)]/30 hover:border-[oklch(0.7_0.15_220)]/50 transition-all group">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-2 flex-1 min-w-0">
+                        <p className="text-xs md:text-sm text-muted-foreground font-medium">
+                          {language === "pt" ? "Objetivos Definidos" : language === "es" ? "Objetivos Definidos" : "Goals Set"}
+                        </p>
+                        <p className="text-2xl md:text-3xl font-bold text-[oklch(0.7_0.15_220)]">
+                          {plannerMetrics.daysWithGoal}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-[oklch(0.7_0.15_220)] to-[oklch(0.54_0.18_285)] transition-all"
+                              style={{ width: `${Math.round((plannerMetrics.daysWithGoal / plannerMetrics.totalDays) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-semibold text-[oklch(0.7_0.15_220)]">
+                            {Math.round((plannerMetrics.daysWithGoal / plannerMetrics.totalDays) * 100)}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-gradient-to-br from-[oklch(0.7_0.15_220)] to-[oklch(0.7_0.15_220)]/70 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                        <Target className="h-5 w-5 md:h-6 md:w-6 text-white" />
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="p-4 md:p-5 bg-gradient-to-br from-[oklch(0.68_0.18_45)]/10 to-[oklch(0.68_0.18_45)]/5 border-[oklch(0.68_0.18_45)]/30 hover:border-[oklch(0.68_0.18_45)]/50 transition-all group">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-2 flex-1 min-w-0">
+                        <p className="text-xs md:text-sm text-muted-foreground font-medium">
+                          {language === "pt" ? "Tarefas Completadas" : language === "es" ? "Tareas Completadas" : "Tasks Completed"}
+                        </p>
+                        <p className="text-2xl md:text-3xl font-bold text-[oklch(0.68_0.18_45)]">
+                          {plannerMetrics.completedTasks}
+                          <span className="text-lg md:text-xl text-muted-foreground font-normal">/{plannerMetrics.totalTasks}</span>
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-[oklch(0.68_0.18_45)] to-[oklch(0.7_0.18_30)] transition-all"
+                              style={{ 
+                                width: plannerMetrics.totalTasks > 0 
+                                  ? `${Math.round((plannerMetrics.completedTasks / plannerMetrics.totalTasks) * 100)}%` 
+                                  : "0%" 
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs font-semibold text-[oklch(0.68_0.18_45)]">
+                            {plannerMetrics.totalTasks > 0
+                              ? `${Math.round((plannerMetrics.completedTasks / plannerMetrics.totalTasks) * 100)}%`
+                              : "0%"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-gradient-to-br from-[oklch(0.68_0.18_45)] to-[oklch(0.68_0.18_45)]/70 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                        <CheckSquare className="h-5 w-5 md:h-6 md:w-6 text-white" />
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="p-4 md:p-5 bg-gradient-to-br from-[oklch(0.7_0.18_30)]/10 to-[oklch(0.7_0.18_30)]/5 border-[oklch(0.7_0.18_30)]/30 hover:border-[oklch(0.7_0.18_30)]/50 transition-all group">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-2 flex-1 min-w-0">
+                        <p className="text-xs md:text-sm text-muted-foreground font-medium">
+                          {language === "pt" ? "Gatilhos Identificados" : language === "es" ? "Gatillos Identificados" : "Triggers Identified"}
+                        </p>
+                        <p className="text-2xl md:text-3xl font-bold text-[oklch(0.7_0.18_30)]">
+                          {plannerMetrics.totalTriggers}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {language === "pt" ? "total registrado" : language === "es" ? "total registrado" : "total recorded"}
+                        </p>
+                      </div>
+                      <div className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-gradient-to-br from-[oklch(0.7_0.18_30)] to-[oklch(0.7_0.18_30)]/70 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                        <AlertTriangle className="h-5 w-5 md:h-6 md:w-6 text-white" />
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Planner Usage Chart */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                  <Card className="p-4 md:p-6 bg-gradient-to-br from-[oklch(0.54_0.18_285)]/5 to-transparent border-[oklch(0.54_0.18_285)]/20">
+                    <div className="flex items-center justify-between mb-4 md:mb-6">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.54_0.18_285)]/70 flex items-center justify-center">
+                          <TrendingUp className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm md:text-base font-semibold">
+                            {language === "pt" ? "Uso do Planner" : language === "es" ? "Uso del Planificador" : "Planner Usage"}
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            {language === "pt" ? "Frequência de uso ao longo do tempo" : language === "es" ? "Frecuencia de uso a lo largo del tiempo" : "Usage frequency over time"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mb-4">
+                      <LineChartSimple
+                        data={plannerMetrics.plannerUsageData.map((v) => v * 100)}
+                        color="oklch(0.54 0.18 285)"
+                        label=""
+                      />
+                    </div>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 md:p-4 rounded-lg bg-muted/30">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">
+                          {language === "pt" ? "Taxa de uso" : language === "es" ? "Tasa de uso" : "Usage rate"}
+                        </p>
+                        <p className="text-2xl md:text-3xl font-bold text-[oklch(0.54_0.18_285)]">
+                          {Math.round((plannerMetrics.plannerUsageData.filter((v) => v === 1).length / plannerMetrics.plannerUsageData.length) * 100)}%
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground mb-1">
+                          {language === "pt" ? "Dias ativos" : language === "es" ? "Días activos" : "Active days"}
+                        </p>
+                        <p className="text-lg md:text-xl font-semibold">
+                          {plannerMetrics.plannerUsageData.filter((v) => v === 1).length}/{plannerMetrics.plannerUsageData.length}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Mood Distribution */}
+                  <Card className="p-4 md:p-6 bg-gradient-to-br from-[oklch(0.7_0.15_220)]/5 to-transparent border-[oklch(0.7_0.15_220)]/20">
+                    <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
+                      <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg bg-gradient-to-br from-[oklch(0.7_0.15_220)] to-[oklch(0.7_0.15_220)]/70 flex items-center justify-center">
+                        <Smile className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm md:text-base font-semibold">
+                          {language === "pt" ? "Distribuição de Humor" : language === "es" ? "Distribución de Humor" : "Mood Distribution"}
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          {language === "pt" ? "Como você se sentiu nos últimos dias" : language === "es" ? "Cómo te sentiste en los últimos días" : "How you felt in recent days"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-3 md:space-y-4">
+                      {Object.entries(plannerMetrics.moodDistribution)
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([mood, count]) => {
+                          const percentage = (count / plannerMetrics.totalDays) * 100
+                          return (
+                            <div key={mood} className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 md:gap-3">
+                                  <span className="text-xl md:text-2xl">{mood}</span>
+                                  <span className="text-xs md:text-sm text-muted-foreground">
+                                    {percentage.toFixed(0)}%
+                                  </span>
+                                </div>
+                                <span className="text-sm md:text-base font-medium text-muted-foreground">
+                                  {count} {language === "pt" ? "dias" : language === "es" ? "días" : "days"}
+                                </span>
+                              </div>
+                              <div className="h-2.5 md:h-3 bg-muted rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] transition-all duration-500 ease-out"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      {Object.keys(plannerMetrics.moodDistribution).length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-8 md:py-12">
+                          <Smile className="h-12 w-12 md:h-16 md:w-16 text-muted-foreground/30 mb-3" />
+                          <p className="text-sm md:text-base text-muted-foreground text-center">
+                            {language === "pt" ? "Nenhum humor registrado ainda" : language === "es" ? "No se registró humor aún" : "No mood recorded yet"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Triggers Analysis */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                  {/* Triggers by Intensity */}
+                  <Card className="p-4 md:p-6 bg-gradient-to-br from-[oklch(0.7_0.18_30)]/5 to-transparent border-[oklch(0.7_0.18_30)]/20">
+                    <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
+                      <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg bg-gradient-to-br from-[oklch(0.7_0.18_30)] to-[oklch(0.7_0.18_30)]/70 flex items-center justify-center">
+                        <Zap className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm md:text-base font-semibold">
+                          {language === "pt" ? "Gatilhos por Intensidade" : language === "es" ? "Gatillos por Intensidad" : "Triggers by Intensity"}
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          {language === "pt" ? "Distribuição dos níveis de intensidade" : language === "es" ? "Distribución de los niveles de intensidad" : "Distribution of intensity levels"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-3 md:space-y-4">
+                      {[
+                        { key: "leve", label: t.intensityLight, color: "bg-green-500/20 text-green-400 border-green-500/30", barColor: "bg-green-500" },
+                        { key: "moderado", label: t.intensityModerate, color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", barColor: "bg-yellow-500" },
+                        { key: "forte", label: t.intensityStrong, color: "bg-red-500/20 text-red-400 border-red-500/30", barColor: "bg-red-500" },
+                      ].map(({ key, label, color, barColor }) => {
+                        const count = plannerMetrics.triggersByIntensity[key as keyof typeof plannerMetrics.triggersByIntensity]
+                        const percentage = plannerMetrics.totalTriggers > 0 ? (count / plannerMetrics.totalTriggers) * 100 : 0
+                        return (
+                          <div key={key} className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className={cn("px-2.5 py-1.5 rounded-md text-xs md:text-sm font-medium border", color)}>
+                                {label}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm md:text-base font-semibold text-foreground">{count}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  ({percentage.toFixed(0)}%)
+                                </span>
+                              </div>
+                            </div>
+                            <div className="h-2.5 md:h-3 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={cn("h-full transition-all duration-500 ease-out", barColor)}
+                                style={{ width: `${percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </Card>
+
+                  {/* Top Triggers */}
+                  <Card className="p-4 md:p-6 bg-gradient-to-br from-[oklch(0.68_0.18_45)]/5 to-transparent border-[oklch(0.68_0.18_45)]/20">
+                    <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
+                      <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg bg-gradient-to-br from-[oklch(0.68_0.18_45)] to-[oklch(0.68_0.18_45)]/70 flex items-center justify-center">
+                        <AlertTriangle className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm md:text-base font-semibold">
+                          {language === "pt" ? "Gatilhos Mais Frequentes" : language === "es" ? "Gatillos Más Frecuentes" : "Most Frequent Triggers"}
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          {language === "pt" ? "Os gatilhos que mais aparecem" : language === "es" ? "Los gatillos que más aparecen" : "The triggers that appear most often"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2 md:space-y-3">
+                      {plannerMetrics.topTriggers.length > 0 ? (
+                        plannerMetrics.topTriggers.map((trigger, index) => (
+                          <div
+                            key={index}
+                            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 md:p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-transparent hover:border-white/10"
+                          >
+                            <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
+                              <div className="h-6 w-6 md:h-8 md:w-8 rounded-md bg-gradient-to-br from-[oklch(0.68_0.18_45)]/20 to-[oklch(0.68_0.18_45)]/10 flex items-center justify-center shrink-0">
+                                <span className="text-xs md:text-sm font-bold text-[oklch(0.68_0.18_45)]">
+                                  {index + 1}
+                                </span>
+                              </div>
+                              <span className="text-sm md:text-base flex-1 truncate font-medium">{trigger.text}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={cn(
+                                "text-xs md:text-sm px-2 md:px-2.5 py-1 md:py-1.5 rounded-md font-medium border",
+                                trigger.intensity === "leve" && "bg-green-500/20 text-green-400 border-green-500/30",
+                                trigger.intensity === "moderado" && "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+                                trigger.intensity === "forte" && "bg-red-500/20 text-red-400 border-red-500/30"
+                              )}>
+                                {trigger.intensity === "leve" ? t.intensityLight : trigger.intensity === "moderado" ? t.intensityModerate : t.intensityStrong}
+                              </span>
+                              <span className="text-xs md:text-sm font-semibold text-muted-foreground bg-background/50 px-2 py-1 rounded-md">
+                                {trigger.count}x
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-8 md:py-12">
+                          <AlertTriangle className="h-12 w-12 md:h-16 md:w-16 text-muted-foreground/30 mb-3" />
+                          <p className="text-sm md:text-base text-muted-foreground text-center">
+                            {language === "pt" ? "Nenhum gatilho registrado ainda" : language === "es" ? "No se registró gatillo aún" : "No triggers recorded yet"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                </div>
+              </div>
+            )}
           </Card>
         </main>
       </div>

@@ -184,3 +184,5 @@ Execute a migração SQL no Supabase:
 - Verifique se o template tem tarefas cadastradas
 - Confirme que o `template_id` está correto no `program_days`
 
+
+

@@ -75,6 +75,7 @@ export default function ProgramPage() {
   const [reflectionText, setReflectionText] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [isCompleting, setIsCompleting] = useState(false)
+  const [hasCompletedToday, setHasCompletedToday] = useState(false)
 
   // Load user progress and program days
   useEffect(() => {
@@ -142,6 +143,19 @@ export default function ProgramPage() {
           totalXp: progress.total_xp || 0,
         })
       }
+
+      // Check if user completed a day today
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const { data: todayCompletion } = await supabase
+        .from("program_days")
+        .select("completed_at")
+        .eq("user_id", user.id)
+        .eq("completed", true)
+        .gte("completed_at", today.toISOString())
+        .limit(1)
+
+      setHasCompletedToday((todayCompletion?.length || 0) > 0)
 
       // Load program days
       const { data: days } = await supabase
@@ -508,7 +522,7 @@ export default function ProgramPage() {
     }
   }
 
-  const getDayStatus = (dayNumber: number): "completed" | "current" | "locked" => {
+  const getDayStatus = (dayNumber: number): "completed" | "current" | "locked" | "upcoming" => {
     const day = programDays.find((d) => d.day_number === dayNumber)
     if (!day) return "locked"
 
@@ -522,9 +536,20 @@ export default function ProgramPage() {
       const now = new Date()
       now.setHours(0, 0, 0, 0)
       
-      // Só está desbloqueado se a data de desbloqueio já passou (incluindo hoje)
+      // Se a data de desbloqueio já passou (incluindo hoje), está disponível
       if (unlockDate <= now) {
         return "current"
+      }
+      // Se ainda não chegou a data, verificar se é o próximo dia e o usuário já completou hoje
+      if (unlockDate > now && hasCompletedToday) {
+        // Verificar se é o próximo dia após o último dia completo
+        const lastCompletedDay = programDays
+          .filter((d) => d.completed)
+          .sort((a, b) => (b.day_number || 0) - (a.day_number || 0))[0]
+        
+        if (lastCompletedDay && dayNumber === lastCompletedDay.day_number + 1) {
+          return "upcoming"
+        }
       }
       // Se ainda não chegou a data, está bloqueado
       return "locked"
@@ -549,6 +574,27 @@ export default function ProgramPage() {
       number: Math.floor(i / 7) + 1,
       days: weekDays,
     })
+  }
+  
+  // Also include the next day if it's upcoming (visible but not clickable)
+  const nextDayNumber = programDays
+    .filter((d) => d.completed)
+    .sort((a, b) => (b.day_number || 0) - (a.day_number || 0))[0]?.day_number || 0
+  
+  if (nextDayNumber > 0 && nextDayNumber < 90) {
+    const nextDay = nextDayNumber + 1
+    const nextDayStatus = getDayStatus(nextDay)
+    if (nextDayStatus === "upcoming") {
+      // Find the week that should contain this day
+      const weekIndex = Math.floor((nextDay - 1) / 7)
+      if (weeks[weekIndex]) {
+        // Check if the day is not already in the week
+        if (!weeks[weekIndex].days.find((d) => d.day === nextDay)) {
+          weeks[weekIndex].days.push({ day: nextDay, status: "upcoming" })
+          weeks[weekIndex].days.sort((a, b) => a.day - b.day)
+        }
+      }
+    }
   }
 
   const canUnlockDay = (dayNumber: number): boolean => {
