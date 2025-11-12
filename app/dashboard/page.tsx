@@ -12,9 +12,10 @@ import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
-import { Hand, Brain, RotateCcw, MoreHorizontal, Sparkles, AlertCircle, Check, X, Minus } from "lucide-react"
+import { Hand, Brain, RotateCcw, MoreHorizontal, Sparkles, AlertCircle, Check, X, Minus, Cloud, Plus } from "lucide-react"
 import { PeacefulAnimation } from "@/components/peaceful-animation"
 import { LifeTreeLandscape } from "@/components/life-tree-landscape"
+import { TonyCharacter } from "@/components/melius-character"
 import Link from "next/link"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
@@ -220,6 +221,33 @@ export default function DashboardPage() {
                   <LifeTreeLandscape />
                 </Card>
               </Link>
+            </div>
+          </div>
+
+          {/* Speak to Tony Section */}
+          <div className="space-y-4 mb-6 mt-16 md:mt-20">
+            <div className="flex items-center gap-2">
+              <Cloud className="h-5 w-5 text-white" />
+              <h3 className="text-lg font-semibold text-white">{t.speakToMelius}</h3>
+            </div>
+            <p className="text-sm text-white/70 mb-4">{t.meliusDescription}</p>
+            
+            <div className="relative">
+              <Card className="p-6 bg-gradient-to-br from-blue-900 to-indigo-900 border-white/10 hover:border-blue-400/50 transition-all cursor-pointer group overflow-hidden min-h-[120px]">
+                <div className="flex items-center justify-between relative z-10">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center group-hover:bg-white/90 transition-colors shadow-md">
+                      <Plus className="h-6 w-6 text-blue-900" />
+                    </div>
+                    <span className="text-white font-semibold text-lg">{t.newSession}</span>
+                  </div>
+                </div>
+                
+                {/* Character positioned on the right, overlapping */}
+                <div className="absolute right-0 top-0 bottom-0 flex items-end opacity-90 group-hover:opacity-100 transition-opacity -mr-4">
+                  <TonyCharacter />
+                </div>
+              </Card>
             </div>
           </div>
         </main>

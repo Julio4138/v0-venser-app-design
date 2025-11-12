@@ -18,6 +18,8 @@ As dependências já foram instaladas:
 
 ### 3. Configurar variáveis de ambiente
 
+#### Para desenvolvimento local:
+
 Crie um arquivo `.env.local` na raiz do projeto com o seguinte conteúdo:
 
 ```env
@@ -30,6 +32,22 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-chave-anon
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
+
+#### Para deploy no Vercel:
+
+1. Acesse o [Dashboard do Vercel](https://vercel.com/dashboard)
+2. Selecione seu projeto
+3. Vá em **Settings** > **Environment Variables**
+4. Adicione as seguintes variáveis:
+   - **Name**: `NEXT_PUBLIC_SUPABASE_URL`
+     **Value**: `https://seu-projeto.supabase.co`
+   - **Name**: `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+     **Value**: `sua-chave-anon-aqui`
+5. Selecione os ambientes onde deseja aplicar (Production, Preview, Development)
+6. Clique em **Save**
+7. Faça um novo deploy para aplicar as variáveis
+
+⚠️ **IMPORTANTE**: Sem essas variáveis configuradas no Vercel, o build pode falhar ou a aplicação não funcionará corretamente em produção.
 
 ### 4. Estrutura criada
 

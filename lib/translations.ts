@@ -179,6 +179,9 @@ export const translations = {
     daysChallenge: "desafio de 28 dias",
     lifeTree: "Árvore da Vida",
     panicButton: "Botão de Pânico",
+    speakToMelius: "Falar com Tony",
+    meliusDescription: "Nosso terapeuta 24/7 especializado em dependência de pornografia",
+    newSession: "Nova Sessão",
   },
   en: {
     welcome: "Welcome to",
@@ -360,6 +363,9 @@ export const translations = {
     daysChallenge: "28 days challenge",
     lifeTree: "Life Tree",
     panicButton: "Panic Button",
+    speakToMelius: "Speak to Tony",
+    meliusDescription: "Our 24/7 therapist who specialized in porn addiction",
+    newSession: "New Session",
   },
   es: {
     welcome: "Bienvenido a",
@@ -541,6 +547,9 @@ export const translations = {
     daysChallenge: "desafío de 28 días",
     lifeTree: "Árbol de la Vida",
     panicButton: "Botón de Pánico",
+    speakToMelius: "Hablar con Tony",
+    meliusDescription: "Nuestro terapeuta 24/7 especializado en adicción a la pornografía",
+    newSession: "Nueva Sesión",
   },
 } as const
 
