@@ -51,8 +51,8 @@ export default function DashboardPage() {
       <MobileHeader />
       <DesktopSidebar />
 
-      <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
-        <main className="max-w-7xl mx-auto px-4 pt-20 lg:pt-8 py-8 space-y-6 pb-40 lg:pb-24">
+      <div className={cn(collapsed ? "md:ml-20 lg:ml-20" : "md:ml-56 lg:ml-64")}>
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-20 md:pt-8 py-6 md:py-8 space-y-6 pb-40 md:pb-24">
           {/* Weekly Check-in Section */}
           <div className="space-y-3 mb-6">
             <div className="flex items-center justify-center gap-2 md:gap-3">
@@ -96,44 +96,38 @@ export default function DashboardPage() {
             <p className="text-center text-white/70 text-sm">{t.earlyPreview}</p>
           </div>
 
-          {/* Header Section - Mobile Style */}
-          <div className="space-y-4 mb-6 lg:hidden">
+          {/* Header Section - All Devices */}
+          <div className="space-y-4 mb-6 md:mb-8">
             <PeacefulAnimation />
             <div className="text-center space-y-2">
-              <p className="text-white text-sm">{t.youveBeenFree}:</p>
+              <p className="text-white text-sm md:text-lg">{t.youveBeenFree}:</p>
               <TimerDisplay startDate={startDate} />
             </div>
           </div>
 
-          {/* Timer Section - Desktop */}
-          <div className="hidden lg:block text-center mb-8">
-            <p className="text-white text-lg mb-2">{t.youveBeenFree}:</p>
-            <TimerDisplay startDate={startDate} />
-          </div>
-
           {/* Action Buttons */}
-          <div className="flex items-center justify-center gap-4 md:gap-6 mb-6">
+          <div className="flex items-center justify-center gap-3 sm:gap-4 md:gap-6 mb-6">
             <button className="flex flex-col items-center gap-2 text-white hover:opacity-80 transition-opacity">
-              <div className="h-14 w-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-                <Hand className="h-6 w-6" />
+              <div className="h-12 w-12 md:h-14 md:w-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+                <Hand className="h-5 w-5 md:h-6 md:w-6" />
               </div>
               <span className="text-xs font-medium">{t.pledge}</span>
             </button>
             <button className="flex flex-col items-center gap-2 text-white hover:opacity-80 transition-opacity">
-              <div className="h-14 w-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-                <Brain className="h-6 w-6" />
+              <div className="h-12 w-12 md:h-14 md:w-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+                <Brain className="h-5 w-5 md:h-6 md:w-6" />
               </div>
               <span className="text-xs font-medium">{t.meditate}</span>
             </button>
             <button className="flex flex-col items-center gap-2 text-white hover:opacity-80 transition-opacity">
-              <div className="h-14 w-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-                <RotateCcw className="h-6 w-6" />
+              <div className="h-12 w-12 md:h-14 md:w-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+                <RotateCcw className="h-5 w-5 md:h-6 md:w-6" />
               </div>
               <span className="text-xs font-medium">{t.reset}</span>
             </button>
             <button className="flex flex-col items-center gap-2 text-white hover:opacity-80 transition-opacity">
-              <div className="h-14 w-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-                <MoreHorizontal className="h-6 w-6" />
+              <div className="h-12 w-12 md:h-14 md:w-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+                <MoreHorizontal className="h-5 w-5 md:h-6 md:w-6" />
               </div>
               <span className="text-xs font-medium">{t.more}</span>
             </button>
@@ -166,11 +160,11 @@ export default function DashboardPage() {
           </div>
 
           {/* Challenge and Life Tree Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6">
             {/* 28 Days Challenge Card */}
-            <div className="space-y-2">
+            <div className="flex flex-col space-y-2 h-full">
               <h4 className="text-sm font-semibold text-white ml-1">{t.daysChallenge}</h4>
-              <Card className="p-6 bg-gradient-to-br from-purple-900/80 to-indigo-900/80 border-white/10 backdrop-blur-sm relative overflow-hidden min-h-[180px] flex items-center justify-center">
+              <Card className="p-6 bg-gradient-to-br from-purple-900/80 to-indigo-900/80 border-white/10 backdrop-blur-sm relative overflow-hidden h-full flex items-center justify-center min-h-[180px]">
                 {/* Starry background effect */}
                 <div className="absolute inset-0 opacity-30">
                   {Array.from({ length: 30 }).map((_, i) => {
@@ -196,7 +190,7 @@ export default function DashboardPage() {
                 
                 {/* Number 28 with gradient */}
                 <div className="relative z-10">
-                  <div className="text-7xl md:text-8xl font-bold bg-gradient-to-r from-pink-400 via-purple-400 to-blue-500 bg-clip-text text-transparent">
+                  <div className="text-6xl md:text-7xl lg:text-8xl font-bold bg-gradient-to-r from-pink-400 via-purple-400 to-blue-500 bg-clip-text text-transparent">
                     28
                   </div>
                   
@@ -221,10 +215,10 @@ export default function DashboardPage() {
             </div>
 
             {/* Life Tree Card */}
-            <div className="space-y-2">
+            <div className="flex flex-col space-y-2 h-full">
               <h4 className="text-sm font-semibold text-white ml-1">{t.lifeTree}</h4>
-              <Link href="/program">
-                <Card className="p-0 bg-transparent border-white/10 backdrop-blur-sm hover:border-green-500/50 transition-all cursor-pointer h-full overflow-hidden min-h-[180px]">
+              <Link href="/program" className="h-full flex">
+                <Card className="p-0 bg-transparent border-white/10 backdrop-blur-sm hover:border-green-500/50 transition-all cursor-pointer h-full w-full overflow-hidden min-h-[180px] flex items-center justify-center">
                   <LifeTreeLandscape />
                 </Card>
               </Link>
@@ -360,7 +354,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Status Cards Section */}
-          <div className="grid grid-cols-2 gap-3 md:gap-4 mb-6 mt-12">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mb-6 mt-12">
             {/* On Track Card */}
             <Card className="p-4 md:p-5 bg-gradient-to-br from-blue-950/50 to-indigo-950/50 border-white/10 backdrop-blur-sm">
               <div className="flex flex-col items-center text-center space-y-2 md:space-y-3">
@@ -369,7 +363,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs md:text-sm text-white/70">{t.onTrackToQuit}</p>
-                  <p className="text-base md:text-xl font-bold text-white">20 de Ago de 2025</p>
+                  <p className="text-sm md:text-base lg:text-xl font-bold text-white">20 de Ago de 2025</p>
                 </div>
               </div>
             </Card>
@@ -378,11 +372,11 @@ export default function DashboardPage() {
             <Card className="p-4 md:p-5 bg-gradient-to-br from-blue-950/50 to-indigo-950/50 border-white/10 backdrop-blur-sm">
               <div className="flex flex-col items-center text-center space-y-2 md:space-y-3">
                 <div className="w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center relative">
-                  <div className="text-3xl md:text-4xl">🤩</div>
+                  <div className="text-2xl md:text-3xl lg:text-4xl">🤩</div>
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs md:text-sm text-white/70">{t.temptedToRelapse}</p>
-                  <p className="text-base md:text-xl font-bold text-green-400">{t.falseText}</p>
+                  <p className="text-sm md:text-base lg:text-xl font-bold text-green-400">{t.falseText}</p>
                 </div>
               </div>
             </Card>
@@ -592,8 +586,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Panic Button - Fixed at bottom, above mobile nav */}
-      <div className="fixed bottom-20 left-0 right-0 z-50 p-4 lg:bottom-4 lg:pl-0 lg:pr-0">
-        <div className={cn("max-w-7xl mx-auto", collapsed ? "lg:ml-20 lg:px-4" : "lg:ml-64 lg:px-4")}>
+      <div className="fixed bottom-20 left-0 right-0 z-50 p-4 md:bottom-4 md:pl-0 md:pr-0">
+        <div className={cn("max-w-7xl mx-auto", collapsed ? "md:ml-20 lg:ml-20 md:px-4" : "md:ml-56 lg:ml-64 md:px-4")}>
           <Button
             onClick={handlePanicButton}
             className="w-full h-14 bg-red-900/30 hover:bg-red-900/40 backdrop-blur-sm text-white font-semibold rounded-full border-2 border-red-400 shadow-[0_0_15px_rgba(248,113,113,0.6),0_0_30px_rgba(239,68,68,0.4)] hover:shadow-[0_0_20px_rgba(248,113,113,0.8),0_0_40px_rgba(239,68,68,0.5)] transition-all flex items-center justify-center gap-2"

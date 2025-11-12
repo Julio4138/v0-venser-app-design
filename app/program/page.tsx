@@ -79,12 +79,12 @@ export default function ProgramPage() {
       <MobileHeader />
       <DesktopSidebar />
 
-      <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
-        <main className="max-w-7xl mx-auto px-4 pt-20 lg:pt-8 py-8 space-y-8 pb-20 lg:pb-8">
+      <div className={cn(collapsed ? "md:ml-20 lg:ml-20" : "md:ml-56 lg:ml-64")}>
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-20 md:pt-8 py-6 md:py-8 space-y-6 md:space-y-8 pb-20 md:pb-8">
           {/* Progress Header */}
-          <Card className="p-6 venser-card-glow">
+          <Card className="p-5 md:p-6 venser-card-glow">
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <h1 className="text-2xl md:text-3xl font-bold">{t.dayJourney}</h1>
                 <div className="flex items-center gap-2">
                   <Flame className="h-5 w-5 text-[oklch(0.68_0.18_45)]" />
@@ -111,7 +111,7 @@ export default function ProgramPage() {
               <h2 className="text-lg font-semibold text-muted-foreground">
                 {t.week} {week.number}
               </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
                 {week.days.map((dayData) => (
                   <DayCard
                     key={dayData.day}

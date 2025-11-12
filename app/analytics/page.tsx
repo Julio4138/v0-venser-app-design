@@ -43,25 +43,27 @@ export default function AnalyticsPage() {
       <MobileHeader />
       <DesktopSidebar />
 
-      <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
-        <main className="max-w-7xl mx-auto px-4 pt-20 lg:pt-8 py-8 space-y-8 pb-20 lg:pb-8">
+      <div className={cn(collapsed ? "md:ml-20 lg:ml-20" : "md:ml-56 lg:ml-64")}>
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-20 md:pt-8 py-6 md:py-8 space-y-6 md:space-y-8 pb-20 md:pb-8">
           {/* Recovery Score */}
-          <Card className="p-8 venser-card-glow">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+          <Card className="p-6 md:p-8 venser-card-glow">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8">
               <div className="flex justify-center">
-                <ProgressRing progress={recoveryScore} size={240}>
-                  <div className="text-center">
-                    <div className="text-6xl font-bold bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] bg-clip-text text-transparent">
-                      {recoveryScore}%
+                <div className="scale-90 md:scale-100 lg:scale-110">
+                  <ProgressRing progress={recoveryScore} size={200}>
+                    <div className="text-center">
+                      <div className="text-4xl md:text-5xl lg:text-6xl font-bold bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] bg-clip-text text-transparent">
+                        {recoveryScore}%
+                      </div>
+                      <p className="text-xs md:text-sm text-muted-foreground mt-2">{t.recoveryScore}</p>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-2">{t.recoveryScore}</p>
-                  </div>
-                </ProgressRing>
+                  </ProgressRing>
+                </div>
               </div>
 
               <div className="flex-1 w-full space-y-4">
                 <div>
-                  <h2 className="text-2xl font-bold mb-2">{t.excellentProgress}</h2>
+                  <h2 className="text-xl md:text-2xl font-bold mb-2">{t.excellentProgress}</h2>
                   <p className="text-muted-foreground">{t.focusIncrease}</p>
                 </div>
 
@@ -77,7 +79,7 @@ export default function AnalyticsPage() {
           </Card>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
               icon={Flame}
               label={t.consecutiveDays}
@@ -108,7 +110,7 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Trends */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
             <Card className="p-6">
               <LineChartSimple data={moodData} color="oklch(0.54 0.18 285)" label={t.moodTrend} />
               <div className="mt-4 flex items-center justify-between text-sm">
@@ -132,7 +134,7 @@ export default function AnalyticsPage() {
               <Award className="h-6 w-6 text-[oklch(0.68_0.18_45)]" />
               {t.milestones}
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {milestones.map((milestone) => (
                 <Card
                   key={milestone.id}

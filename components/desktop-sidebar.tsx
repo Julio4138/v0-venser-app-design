@@ -29,18 +29,18 @@ export function DesktopSidebar() {
   return (
     <aside
       className={cn(
-        "hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 venser-card border-r border-white/5 transition-[width] duration-200",
-        collapsed ? "lg:w-20" : "lg:w-64",
+        "hidden md:flex md:flex-col md:fixed md:inset-y-0 venser-card border-r border-white/5 transition-[width] duration-200",
+        collapsed ? "md:w-20 lg:w-20" : "md:w-56 lg:w-64",
       )}
     >
       <div className="flex flex-col flex-1 min-h-0">
         {/* Logo + Collapse */}
-        <div className={cn("flex items-center px-4 py-4", collapsed ? "justify-center" : "justify-between gap-2")}>
+        <div className={cn("flex items-center px-3 md:px-4 py-4", collapsed ? "justify-center" : "justify-between gap-2")}>
           <div className="flex items-center gap-2">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center venser-glow">
-            <Sparkles className="h-6 w-6 text-white" />
+          <div className="h-9 w-9 md:h-10 md:w-10 rounded-xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center venser-glow">
+            <Sparkles className="h-5 w-5 md:h-6 md:w-6 text-white" />
           </div>
-            {!collapsed && <h1 className="text-2xl font-bold text-white">VENSER</h1>}
+            {!collapsed && <h1 className="text-xl md:text-2xl font-bold text-white">VENSER</h1>}
           </div>
           <button
             type="button"
@@ -56,7 +56,7 @@ export function DesktopSidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className={cn("flex-1 py-4 space-y-1", collapsed ? "px-2" : "px-3")}>
+        <nav className={cn("flex-1 py-4 space-y-1", collapsed ? "px-2" : "px-2 md:px-3")}>
           {navigation.map((item) => {
             const isActive = pathname === item.href
             const Icon = item.icon
@@ -66,13 +66,13 @@ export function DesktopSidebar() {
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200",
+                  "flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2.5 md:py-3 rounded-xl text-xs md:text-sm font-medium transition-all duration-200",
                   isActive
                     ? "bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] text-white venser-card-glow"
                     : "text-gray-400 hover:text-white hover:bg-white/5",
                 )}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className="h-4 w-4 md:h-5 md:w-5 shrink-0" />
                 {!collapsed && <span className="truncate">{item.name}</span>}
               </Link>
             )
@@ -80,13 +80,13 @@ export function DesktopSidebar() {
         </nav>
 
         {/* Settings */}
-        <div className={cn("py-4 border-t border-white/5 space-y-3", collapsed ? "px-2" : "px-6")}>
-          <div className={cn("flex items-center", collapsed ? "justify-center" : "justify-between")}>
-            {!collapsed && <span className="text-sm text-gray-400">Idioma</span>}
+        <div className={cn("py-4 border-t border-white/5 space-y-3", collapsed ? "px-2" : "px-3 md:px-6")}>
+          <div className={cn("flex items-center", collapsed ? "justify-center" : "justify-between gap-2")}>
+            {!collapsed && <span className="text-xs md:text-sm text-gray-400">Idioma</span>}
             <LanguageSwitcher currentLanguage={language} onLanguageChange={setLanguage} />
           </div>
-          <div className={cn("flex items-center", collapsed ? "justify-center" : "justify-between")}>
-            {!collapsed && <span className="text-sm text-gray-400">Tema</span>}
+          <div className={cn("flex items-center", collapsed ? "justify-center" : "justify-between gap-2")}>
+            {!collapsed && <span className="text-xs md:text-sm text-gray-400">Tema</span>}
             <ThemeToggle />
           </div>
         </div>

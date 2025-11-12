@@ -71,14 +71,14 @@ export default function ToolsPage() {
       <MobileHeader />
       <DesktopSidebar />
 
-      <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
-        <main className="max-w-7xl mx-auto px-4 pt-20 lg:pt-8 py-6 md:py-8 space-y-8 pb-20 lg:pb-8 relative z-10">
+      <div className={cn(collapsed ? "md:ml-20 lg:ml-20" : "md:ml-56 lg:ml-64")}>
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-20 md:pt-8 py-6 md:py-8 space-y-6 md:space-y-8 pb-20 md:pb-8 relative z-10">
           {/* Header */}
           <div className="relative z-10">
-            <h1 className="text-3xl md:text-4xl font-bold text-white mb-8">{t.tools}</h1>
+            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6 md:mb-8">{t.tools}</h1>
 
             {/* Quick actions row - Circular icons */}
-            <div className="flex flex-wrap gap-6 mb-8">
+            <div className="flex flex-wrap gap-4 md:gap-6 mb-6 md:mb-8">
               {quickActions.map((qa) => {
                 const Icon = qa.icon
                 const isCustomIcon = qa.id === "breathing"
@@ -94,7 +94,7 @@ export default function ToolsPage() {
             </div>
 
             {/* Category pills - 2x2 Grid */}
-            <div className="grid grid-cols-2 gap-4 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
               {/* Articles - Orange gradient */}
               <div className="rounded-full h-20 px-6 flex items-center justify-center text-white font-semibold text-lg bg-gradient-to-r from-orange-500 via-orange-400 to-orange-600 shadow-lg">
                 Articles
@@ -126,8 +126,8 @@ export default function ToolsPage() {
 
           {/* Relaxation Noises Section */}
           <div className="relative z-10 space-y-4">
-            <h2 className="text-xl font-bold text-white">Relaxation Noises</h2>
-            <div className="flex flex-wrap gap-6">
+            <h2 className="text-xl md:text-2xl font-bold text-white">Relaxation Noises</h2>
+            <div className="flex flex-wrap gap-4 md:gap-6">
               {sounds.map((sound) => {
                 const Icon = sound.icon
                 const isPlaying = playingSound === sound.id
@@ -163,7 +163,7 @@ export default function ToolsPage() {
           {/* Tools Section */}
           <div className="relative z-10 space-y-4">
             <div>
-              <h2 className="text-xl font-bold text-white">{t.tools}</h2>
+              <h2 className="text-xl md:text-2xl font-bold text-white">{t.tools}</h2>
               <p className="text-sm text-white/60 mt-1">
                 Science-based methods to aid in reframing your brain
               </p>

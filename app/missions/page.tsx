@@ -40,13 +40,13 @@ export default function MissionsPage() {
       <MobileHeader />
       <DesktopSidebar />
 
-      <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
-        <main className="max-w-4xl mx-auto px-4 pt-20 lg:pt-8 py-8 space-y-8 pb-20 lg:pb-8">
+      <div className={cn(collapsed ? "md:ml-20 lg:ml-20" : "md:ml-56 lg:ml-64")}>
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 md:px-8 pt-20 md:pt-8 py-6 md:py-8 space-y-6 md:space-y-8 pb-20 md:pb-8">
           {/* Progress Card */}
-          <Card className="p-8 venser-card-glow">
+          <Card className="p-6 md:p-8 venser-card-glow">
             <div className="space-y-6">
               <div className="text-center">
-                <h2 className="text-3xl font-bold mb-2">{t.progressToday}</h2>
+                <h2 className="text-2xl md:text-3xl font-bold mb-2">{t.progressToday}</h2>
                 <p className="text-muted-foreground">
                   {missions.filter((m) => m.completed).length} / {missions.length} {t.completed}
                 </p>

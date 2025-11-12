@@ -27,7 +27,7 @@ export function MobileNav({ translations: t }: MobileNavProps) {
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-xl border-t border-border z-50 lg:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-xl border-t border-border z-50 md:hidden">
       <div className="flex items-center justify-around h-16">
         {links.map((link) => {
           const Icon = link.icon

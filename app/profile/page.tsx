@@ -36,29 +36,29 @@ export default function ProfilePage() {
       <MobileHeader />
       <DesktopSidebar />
 
-      <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
-        <main className="max-w-4xl mx-auto px-4 pt-20 lg:pt-8 py-8 space-y-8 pb-20 lg:pb-8">
+      <div className={cn(collapsed ? "md:ml-20 lg:ml-20" : "md:ml-56 lg:ml-64")}>
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 md:px-8 pt-20 md:pt-8 py-6 md:py-8 space-y-6 md:space-y-8 pb-20 md:pb-8">
           {/* Profile Card */}
-          <Card className="p-8">
+          <Card className="p-6 md:p-8">
             <div className="flex flex-col items-center text-center space-y-4">
-              <div className="h-24 w-24 rounded-full bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center venser-glow">
-                <Sparkles className="h-6 w-6 text-white" />
+              <div className="h-20 w-20 md:h-24 md:w-24 rounded-full bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center venser-glow">
+                <Sparkles className="h-5 w-5 md:h-6 md:w-6 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold">Anonymous User</h2>
+                <h2 className="text-xl md:text-2xl font-bold">Anonymous User</h2>
                 <p className="text-muted-foreground">Member since January 2025</p>
               </div>
             </div>
           </Card>
 
           {/* Upgrade to PRO */}
-          <Card className="p-6 bg-gradient-to-br from-[oklch(0.68_0.18_45)]/20 to-[oklch(0.7_0.18_30)]/20 border-[oklch(0.68_0.18_45)]">
-            <div className="flex flex-col md:flex-row items-center gap-6">
-              <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-[oklch(0.68_0.18_45)] to-[oklch(0.7_0.18_30)] flex items-center justify-center shrink-0">
-                <Crown className="h-8 w-8 text-white" />
+          <Card className="p-5 md:p-6 bg-gradient-to-br from-[oklch(0.68_0.18_45)]/20 to-[oklch(0.7_0.18_30)]/20 border-[oklch(0.68_0.18_45)]">
+            <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6">
+              <div className="h-14 w-14 md:h-16 md:w-16 rounded-xl bg-gradient-to-br from-[oklch(0.68_0.18_45)] to-[oklch(0.7_0.18_30)] flex items-center justify-center shrink-0">
+                <Crown className="h-7 w-7 md:h-8 md:w-8 text-white" />
               </div>
               <div className="flex-1 text-center md:text-left">
-                <h3 className="text-xl font-bold mb-1">{t.upgradePro}</h3>
+                <h3 className="text-lg md:text-xl font-bold mb-1">{t.upgradePro}</h3>
                 <p className="text-muted-foreground">
                   Unlock all features including advanced analytics, leaderboard, and premium content
                 </p>

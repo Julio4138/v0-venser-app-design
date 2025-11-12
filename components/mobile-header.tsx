@@ -9,7 +9,7 @@ export function MobileHeader() {
   const { language, setLanguage } = useLanguage()
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 lg:hidden bg-background/98 backdrop-blur-xl border-b border-border shadow-lg">
+    <header className="fixed top-0 left-0 right-0 z-50 md:hidden bg-background/98 backdrop-blur-xl border-b border-border shadow-lg">
       <div className="flex items-center justify-between px-4 py-3 h-16">
         {/* Logo */}
         <div className="flex items-center gap-2.5">
