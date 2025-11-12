@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 320px;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0a1228 0%, #0f1629 100%);
+      color: white;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .header h1 {
+      font-size: 20px;
+      margin-bottom: 5px;
+      background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 15px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    
+    .toggle {
+      position: relative;
+      width: 50px;
+      height: 26px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 13px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    
+    .toggle.active {
+      background: #8b5cf6;
+    }
+    
+    .toggle-slider {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s;
+    }
+    
+    .toggle.active .toggle-slider {
+      transform: translateX(24px);
+    }
+    
+    .button {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: 10px;
+      transition: opacity 0.3s;
+    }
+    
+    .button:hover {
+      opacity: 0.9;
+    }
+    
+    .info {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+      margin-top: 15px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>VENSER Blocker</h1>
+    <p style="font-size: 12px; color: rgba(255,255,255,0.7);">Proteção ativa</p>
+  </div>
+  
+  <div class="status">
+    <span>Bloqueador</span>
+    <div class="toggle" id="toggle">
+      <div class="toggle-slider"></div>
+    </div>
+  </div>
+  
+  <button class="button" id="settingsBtn">Abrir Dashboard</button>
+  
+  <div class="info">
+    Sites problemáticos serão bloqueados automaticamente
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
+
