@@ -9,7 +9,7 @@ import { useLanguage } from "@/lib/language-context"
 import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { Lightbulb, Target, TrendingUp, Calendar, Sparkles } from "lucide-react"
+import { Lightbulb, Target, TrendingUp, Calendar, Sparkles, Check } from "lucide-react"
 import Link from "next/link"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
@@ -23,6 +23,11 @@ export default function DashboardPage() {
   const startDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) // 14 days ago
   const currentDay = 14
   const brainProgress = Math.min((currentDay / 90) * 100, 100)
+  // Weekly check-in (Mon-first ordering)
+  const weekOrder = [1, 2, 3, 4, 5, 6, 0]
+  const weekLabels = ["M", "T", "W", "T", "F", "S", "S"]
+  const todayDow = new Date().getDay()
+  const todayPos = weekOrder.indexOf(todayDow)
 
   return (
     <div className="min-h-screen bg-background">
@@ -33,6 +38,21 @@ export default function DashboardPage() {
           {/* Main Progress Circle */}
           <Card className="p-8 venser-card-glow">
             <div className="text-center space-y-6">
+              {/* Weekly check-in */}
+              <div className="flex items-center justify-center gap-3 md:gap-4">
+                {weekOrder.map((_, idx) => {
+                  const stateClass =
+                    idx < todayPos ? "check-circle completed" : idx === todayPos ? "check-circle today" : "check-circle"
+                  return (
+                    <div key={idx} className="flex flex-col items-center gap-2">
+                      <div className={stateClass}>
+                        {idx < todayPos ? <Check className="h-4 w-4 text-white" /> : <span className="text-xs text-muted-foreground">{weekLabels[idx]}</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
               <h2 className="text-2xl font-semibold text-muted-foreground">{t.cleanFor}</h2>
 
               <div className="flex justify-center">
