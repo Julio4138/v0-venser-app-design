@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { ProgressRing } from "@/components/progress-ring"
 import { TreeOfLife } from "@/components/tree-of-life"
 import { TimerDisplay } from "@/components/timer-display"
@@ -23,9 +24,9 @@ export default function DashboardPage() {
   const { language } = useLanguage()
   const t = translations[language]
   const { collapsed } = useSidebar()
-
+  const [startDate] = useState(() => new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)) // 14 days ago
+  
   // Demo data - in production this would come from a database
-  const startDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) // 14 days ago
   const currentDay = 14
   const brainProgress = Math.min((currentDay / 90) * 100, 100)
   
@@ -106,30 +107,30 @@ export default function DashboardPage() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-center gap-3 sm:gap-4 md:gap-6 mb-6">
-            <button className="flex flex-col items-center gap-2 text-white hover:opacity-80 transition-opacity">
-              <div className="h-12 w-12 md:h-14 md:w-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-                <Hand className="h-5 w-5 md:h-6 md:w-6" />
+          <div className="flex items-center justify-center gap-4 sm:gap-5 md:gap-8 mb-6">
+            <button className="flex flex-col items-center gap-3 text-white hover:opacity-80 transition-opacity">
+              <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+                <span className="text-2xl md:text-3xl">🛑</span>
               </div>
-              <span className="text-xs font-medium">{t.pledge}</span>
+              <span className="text-sm md:text-base font-medium">{t.pledge}</span>
             </button>
-            <button className="flex flex-col items-center gap-2 text-white hover:opacity-80 transition-opacity">
-              <div className="h-12 w-12 md:h-14 md:w-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-                <Brain className="h-5 w-5 md:h-6 md:w-6" />
+            <button className="flex flex-col items-center gap-3 text-white hover:opacity-80 transition-opacity">
+              <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+                <span className="text-2xl md:text-3xl">🧘</span>
               </div>
-              <span className="text-xs font-medium">{t.meditate}</span>
+              <span className="text-sm md:text-base font-medium">{t.meditate}</span>
             </button>
-            <button className="flex flex-col items-center gap-2 text-white hover:opacity-80 transition-opacity">
-              <div className="h-12 w-12 md:h-14 md:w-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-                <RotateCcw className="h-5 w-5 md:h-6 md:w-6" />
+            <button className="flex flex-col items-center gap-3 text-white hover:opacity-80 transition-opacity">
+              <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+                <RotateCcw className="h-6 w-6 md:h-8 md:w-8" />
               </div>
-              <span className="text-xs font-medium">{t.reset}</span>
+              <span className="text-sm md:text-base font-medium">{t.reset}</span>
             </button>
-            <button className="flex flex-col items-center gap-2 text-white hover:opacity-80 transition-opacity">
-              <div className="h-12 w-12 md:h-14 md:w-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-                <MoreHorizontal className="h-5 w-5 md:h-6 md:w-6" />
+            <button className="flex flex-col items-center gap-3 text-white hover:opacity-80 transition-opacity">
+              <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+                <MoreHorizontal className="h-6 w-6 md:h-8 md:w-8" />
               </div>
-              <span className="text-xs font-medium">{t.more}</span>
+              <span className="text-sm md:text-base font-medium">{t.more}</span>
             </button>
           </div>
 
@@ -586,8 +587,11 @@ export default function DashboardPage() {
       </div>
 
       {/* Panic Button - Fixed at bottom, above mobile nav */}
-      <div className="fixed bottom-20 left-0 right-0 z-50 p-4 md:bottom-4 md:pl-0 md:pr-0">
-        <div className={cn("max-w-7xl mx-auto", collapsed ? "md:ml-20 lg:ml-20 md:px-4" : "md:ml-56 lg:ml-64 md:px-4")}>
+      <div className={cn(
+        "fixed bottom-20 left-0 right-0 z-50 p-4 md:bottom-4",
+        collapsed ? "md:left-20 lg:left-20" : "md:left-56 lg:left-64"
+      )}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
           <Button
             onClick={handlePanicButton}
             className="w-full h-14 bg-red-900/30 hover:bg-red-900/40 backdrop-blur-sm text-white font-semibold rounded-full border-2 border-red-400 shadow-[0_0_15px_rgba(248,113,113,0.6),0_0_30px_rgba(239,68,68,0.4)] hover:shadow-[0_0_20px_rgba(248,113,113,0.8),0_0_40px_rgba(239,68,68,0.5)] transition-all flex items-center justify-center gap-2"
