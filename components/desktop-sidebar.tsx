@@ -1,20 +1,47 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, TrendingUp, Wrench, Users, Target, User, Sparkles, PanelLeftOpen, PanelLeftClose } from "lucide-react"
+import { LayoutDashboard, TrendingUp, Wrench, Users, Target, User, Sparkles, PanelLeftOpen, PanelLeftClose, Shield } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/lib/language-context"
 import { translations } from "@/lib/translations"
 import { LanguageSwitcher } from "./language-switcher"
 import { ThemeToggle } from "./theme-toggle"
 import { useSidebar } from "@/lib/sidebar-context"
+import { supabase } from "@/lib/supabase/client"
 
 export function DesktopSidebar() {
   const pathname = usePathname()
   const { language, setLanguage } = useLanguage()
   const t = translations[language]
   const { collapsed, toggle } = useSidebar()
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    checkAdminStatus()
+  }, [])
+
+  const checkAdminStatus = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_pro")
+          .eq("id", user.id)
+          .single()
+
+        setIsAdmin(profile?.is_pro || false)
+      }
+    } catch (error) {
+      console.error("Error checking admin status:", error)
+    }
+  }
 
   const navigation = [
     { name: t.dashboard, href: "/dashboard", icon: LayoutDashboard },
@@ -24,6 +51,7 @@ export function DesktopSidebar() {
     { name: t.community, href: "/community", icon: Users },
     { name: t.missions, href: "/missions", icon: Sparkles },
     { name: t.profile, href: "/profile", icon: User },
+    ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
   ]
 
   return (
