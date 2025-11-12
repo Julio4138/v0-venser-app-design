@@ -11,20 +11,23 @@ import { useLanguage } from "@/lib/language-context"
 import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Flame, Trophy, Brain, Zap, Award, Check } from "lucide-react"
+import { Flame, Trophy, Brain, Zap, Award, Check, TreePine } from "lucide-react"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
+import { TreeForest } from "@/components/tree-forest"
+import { useTreeProgress } from "@/lib/use-tree-progress"
 
 export default function AnalyticsPage() {
   const { language } = useLanguage()
   const [period, setPeriod] = useState<"week" | "month" | "all">("week")
   const t = translations[language]
   const { collapsed } = useSidebar()
+  const treeProgress = useTreeProgress()
 
   // Demo data
   const recoveryScore = 78
-  const consecutiveDays = 14
-  const personalRecord = 21
+  const consecutiveDays = treeProgress.currentStreak || 14
+  const personalRecord = treeProgress.longestStreak || 21
   const mentalClarity = 85
   const energyLevel = 72
 
@@ -127,6 +130,47 @@ export default function AnalyticsPage() {
               </div>
             </Card>
           </div>
+
+          {/* Tree Forest Progress */}
+          <Card className="p-6">
+            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+              <TreePine className="h-6 w-6 text-[oklch(0.68_0.18_45)]" />
+              {t.lifeTree} - {t.forest}
+            </h3>
+            <div className="space-y-4">
+              {treeProgress.isLoading ? (
+                <div className="text-center text-muted-foreground py-8">{t.loading}</div>
+              ) : (
+                <>
+                  <div className="h-64 rounded-lg overflow-hidden bg-gradient-to-br from-green-900/20 to-teal-900/20 border border-green-500/20">
+                    <TreeForest 
+                      totalDaysCompleted={treeProgress.totalDaysCompleted}
+                      totalDaysFailed={treeProgress.totalDaysFailed}
+                      daysPerTree={7}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                    <div className="text-center p-4 bg-muted/50 rounded-lg">
+                      <p className="text-2xl font-bold text-[oklch(0.68_0.18_45)]">{treeProgress.totalTrees}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{t.treesCompleted}</p>
+                    </div>
+                    <div className="text-center p-4 bg-muted/50 rounded-lg">
+                      <p className="text-2xl font-bold text-[oklch(0.54_0.18_285)]">{treeProgress.currentTreeProgress}/7</p>
+                      <p className="text-sm text-muted-foreground mt-1">{t.currentTreeProgress}</p>
+                    </div>
+                    <div className="text-center p-4 bg-muted/50 rounded-lg">
+                      <p className="text-2xl font-bold text-[oklch(0.7_0.15_220)]">{treeProgress.totalDaysCompleted}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{t.daysCompleted}</p>
+                    </div>
+                    <div className="text-center p-4 bg-muted/50 rounded-lg">
+                      <p className="text-2xl font-bold text-red-400">{treeProgress.totalDaysFailed}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{t.daysWithFailure}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </Card>
 
           {/* Milestones */}
           <Card className="p-6">
