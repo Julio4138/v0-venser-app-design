@@ -12,9 +12,11 @@ import { Progress } from "@/components/ui/progress"
 import { BookOpen, Brain, Flame, Check } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { useSidebar } from "@/lib/sidebar-context"
 
 export default function ProgramPage() {
   const { language } = useLanguage()
+  const { collapsed } = useSidebar()
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
   const [mood, setMood] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -75,7 +77,7 @@ export default function ProgramPage() {
     <div className="min-h-screen bg-background">
       <DesktopSidebar />
 
-      <div className="lg:ml-64">
+      <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
         <main className="max-w-7xl mx-auto px-4 py-8 space-y-8 pb-20 lg:pb-8">
           {/* Progress Header */}
           <Card className="p-6 venser-card-glow">

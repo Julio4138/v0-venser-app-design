@@ -9,11 +9,14 @@ import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Brain, Wind, Podcast, Trophy, CloudRain, Waves, Radio, Flame, BookOpen, Play, Lock } from "lucide-react"
+import { useSidebar } from "@/lib/sidebar-context"
+import { cn } from "@/lib/utils"
 
 export default function ToolsPage() {
   const { language } = useLanguage()
   const [playingSound, setPlayingSound] = useState<string | null>(null)
   const t = translations[language]
+  const { collapsed } = useSidebar()
 
   const tools = [
     {
@@ -73,7 +76,7 @@ export default function ToolsPage() {
     <div className="min-h-screen bg-background">
       <DesktopSidebar />
 
-      <div className="lg:ml-64">
+      <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
         <main className="max-w-7xl mx-auto px-4 py-8 space-y-8 pb-20 lg:pb-8">
           {/* Main Tools Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

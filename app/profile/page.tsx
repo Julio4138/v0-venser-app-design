@@ -6,16 +6,19 @@ import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Sparkles, Settings, Crown, LogOut } from "lucide-react"
+import { useSidebar } from "@/lib/sidebar-context"
+import { cn } from "@/lib/utils"
 
 export default function ProfilePage() {
   const { language } = useLanguage()
   const t = translations[language]
+  const { collapsed } = useSidebar()
 
   return (
     <div className="min-h-screen bg-background">
       <DesktopSidebar />
 
-      <div className="lg:ml-64">
+      <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
         <main className="max-w-4xl mx-auto px-4 py-8 space-y-8 pb-20 lg:pb-8">
           {/* Profile Card */}
           <Card className="p-8">

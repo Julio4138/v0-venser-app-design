@@ -9,10 +9,13 @@ import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Sparkles, Wind, BookOpen, FileText, Brain, Smile } from "lucide-react"
+import { useSidebar } from "@/lib/sidebar-context"
+import { cn } from "@/lib/utils"
 
 export default function MissionsPage() {
   const { language } = useLanguage()
   const t = translations[language]
+  const { collapsed } = useSidebar()
 
   const [missions, setMissions] = useState([
     { id: 1, icon: Wind, title: t.mission1, xp: 10, completed: false },
@@ -35,7 +38,7 @@ export default function MissionsPage() {
     <div className="min-h-screen bg-background">
       <DesktopSidebar />
 
-      <div className="lg:ml-64">
+      <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
         <main className="max-w-4xl mx-auto px-4 py-8 space-y-8 pb-20 lg:pb-8">
           {/* Progress Card */}
           <Card className="p-8 venser-card-glow">

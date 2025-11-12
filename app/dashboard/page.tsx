@@ -11,10 +11,13 @@ import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Lightbulb, Target, TrendingUp, Calendar, Sparkles } from "lucide-react"
 import Link from "next/link"
+import { useSidebar } from "@/lib/sidebar-context"
+import { cn } from "@/lib/utils"
 
 export default function DashboardPage() {
   const { language } = useLanguage()
   const t = translations[language]
+  const { collapsed } = useSidebar()
 
   // Demo data - in production this would come from a database
   const startDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) // 14 days ago
@@ -25,7 +28,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-background">
       <DesktopSidebar />
 
-      <div className="lg:ml-64">
+      <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
         <main className="max-w-7xl mx-auto px-4 py-8 space-y-8 pb-20 lg:pb-8">
           {/* Main Progress Circle */}
           <Card className="p-8 venser-card-glow">

@@ -7,10 +7,13 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Trophy, Flame, Award, MessageCircle } from "lucide-react"
+import { useSidebar } from "@/lib/sidebar-context"
+import { cn } from "@/lib/utils"
 
 export default function CommunityPage() {
   const { language } = useLanguage()
   const t = translations[language]
+  const { collapsed } = useSidebar()
 
   const leaderboard = [
     { rank: 1, initial: "J.", streak: 45, isPro: true },
@@ -52,7 +55,7 @@ export default function CommunityPage() {
     <div className="min-h-screen bg-background">
       <DesktopSidebar />
 
-      <div className="lg:ml-64">
+      <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
         <main className="max-w-7xl mx-auto px-4 py-8 space-y-8 pb-20 lg:pb-8">
           {/* Leaderboard */}
           <Card className="p-6">

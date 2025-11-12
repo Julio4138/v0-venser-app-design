@@ -11,11 +11,14 @@ import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Flame, Trophy, Brain, Zap, Award, Check } from "lucide-react"
+import { useSidebar } from "@/lib/sidebar-context"
+import { cn } from "@/lib/utils"
 
 export default function AnalyticsPage() {
   const { language } = useLanguage()
   const [period, setPeriod] = useState<"week" | "month" | "all">("week")
   const t = translations[language]
+  const { collapsed } = useSidebar()
 
   // Demo data
   const recoveryScore = 78
@@ -38,7 +41,7 @@ export default function AnalyticsPage() {
     <div className="min-h-screen bg-background">
       <DesktopSidebar />
 
-      <div className="lg:ml-64">
+      <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
         <main className="max-w-7xl mx-auto px-4 py-8 space-y-8 pb-20 lg:pb-8">
           {/* Recovery Score */}
           <Card className="p-8 venser-card-glow">
