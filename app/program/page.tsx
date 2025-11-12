@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { MobileNav } from "@/components/mobile-nav"
+import { MobileHeader } from "@/components/mobile-header"
 import { DesktopSidebar } from "@/components/desktop-sidebar"
 import { DayCard } from "@/components/day-card"
 import { useLanguage } from "@/lib/language-context"
@@ -75,10 +76,11 @@ export default function ProgramPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <MobileHeader />
       <DesktopSidebar />
 
       <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
-        <main className="max-w-7xl mx-auto px-4 py-8 space-y-8 pb-20 lg:pb-8">
+        <main className="max-w-7xl mx-auto px-4 pt-20 lg:pt-8 py-8 space-y-8 pb-20 lg:pb-8">
           {/* Progress Header */}
           <Card className="p-6 venser-card-glow">
             <div className="space-y-4">

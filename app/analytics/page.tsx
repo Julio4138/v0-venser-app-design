@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { MobileNav } from "@/components/mobile-nav"
+import { MobileHeader } from "@/components/mobile-header"
 import { DesktopSidebar } from "@/components/desktop-sidebar"
 import { ProgressRing } from "@/components/progress-ring"
 import { StatCard } from "@/components/stat-card"
@@ -39,10 +40,11 @@ export default function AnalyticsPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <MobileHeader />
       <DesktopSidebar />
 
       <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
-        <main className="max-w-7xl mx-auto px-4 py-8 space-y-8 pb-20 lg:pb-8">
+        <main className="max-w-7xl mx-auto px-4 pt-20 lg:pt-8 py-8 space-y-8 pb-20 lg:pb-8">
           {/* Recovery Score */}
           <Card className="p-8 venser-card-glow">
             <div className="flex flex-col md:flex-row items-center justify-between gap-8">

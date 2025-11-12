@@ -1,6 +1,7 @@
 "use client"
 import { DesktopSidebar } from "@/components/desktop-sidebar"
 import { MobileNav } from "@/components/mobile-nav"
+import { MobileHeader } from "@/components/mobile-header"
 import { useLanguage } from "@/lib/language-context"
 import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
@@ -53,10 +54,11 @@ export default function CommunityPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <MobileHeader />
       <DesktopSidebar />
 
       <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
-        <main className="max-w-7xl mx-auto px-4 py-8 space-y-8 pb-20 lg:pb-8">
+        <main className="max-w-7xl mx-auto px-4 pt-20 lg:pt-8 py-8 space-y-8 pb-20 lg:pb-8">
           {/* Leaderboard */}
           <Card className="p-6">
             <div className="flex items-center justify-between mb-6">

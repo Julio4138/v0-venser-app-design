@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { DesktopSidebar } from "@/components/desktop-sidebar"
 import { MobileNav } from "@/components/mobile-nav"
+import { MobileHeader } from "@/components/mobile-header"
 import { useLanguage } from "@/lib/language-context"
 import { translations } from "@/lib/translations"
 import { Button } from "@/components/ui/button"
@@ -67,10 +68,11 @@ export default function ToolsPage() {
 
   return (
     <div className="min-h-screen tools-background relative">
+      <MobileHeader />
       <DesktopSidebar />
 
       <div className={cn(collapsed ? "lg:ml-20" : "lg:ml-64")}>
-        <main className="max-w-7xl mx-auto px-4 py-6 md:py-8 space-y-8 pb-20 lg:pb-8 relative z-10">
+        <main className="max-w-7xl mx-auto px-4 pt-20 lg:pt-8 py-6 md:py-8 space-y-8 pb-20 lg:pb-8 relative z-10">
           {/* Header */}
           <div className="relative z-10">
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-8">{t.tools}</h1>
