@@ -12,10 +12,9 @@ import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
-import { Hand, Brain, RotateCcw, MoreHorizontal, Sparkles, AlertCircle, Check, X, Minus, Cloud, Plus } from "lucide-react"
+import { Hand, Brain, RotateCcw, MoreHorizontal, Sparkles, AlertCircle, Check, X, Minus, Cloud, Plus, Flower2, Bell, TreePine, MessageCircle, Globe, SquarePlus, Circle, HelpCircle, Star, ChevronRight, Heart, BookOpen, Smile, Users, Target, RotateCw, ClipboardList, Wind, Award, Quote } from "lucide-react"
 import { PeacefulAnimation } from "@/components/peaceful-animation"
 import { LifeTreeLandscape } from "@/components/life-tree-landscape"
-import { TonyCharacter } from "@/components/melius-character"
 import Link from "next/link"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
@@ -174,17 +173,25 @@ export default function DashboardPage() {
               <Card className="p-6 bg-gradient-to-br from-purple-900/80 to-indigo-900/80 border-white/10 backdrop-blur-sm relative overflow-hidden min-h-[180px] flex items-center justify-center">
                 {/* Starry background effect */}
                 <div className="absolute inset-0 opacity-30">
-                  {Array.from({ length: 30 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="absolute w-1 h-1 bg-white rounded-full"
-                      style={{
-                        top: `${Math.random() * 100}%`,
-                        left: `${Math.random() * 100}%`,
-                        opacity: Math.random() * 0.5 + 0.3,
-                      }}
-                    />
-                  ))}
+                  {Array.from({ length: 30 }).map((_, i) => {
+                    // Use deterministic values based on index to avoid hydration mismatch
+                    const seed = i * 0.618033988749895 // Golden ratio for better distribution
+                    const top = ((seed * 100) % 100).toFixed(2)
+                    const left = (((seed * 1.618033988749895) * 100) % 100).toFixed(2)
+                    const opacity = (0.3 + ((seed * 0.5) % 0.5)).toFixed(3)
+                    
+                    return (
+                      <div
+                        key={i}
+                        className="absolute w-1 h-1 bg-white rounded-full"
+                        style={{
+                          top: `${top}%`,
+                          left: `${left}%`,
+                          opacity: parseFloat(opacity),
+                        }}
+                      />
+                    )
+                  })}
                 </div>
                 
                 {/* Number 28 with gradient */}
@@ -234,20 +241,351 @@ export default function DashboardPage() {
             
             <div className="relative">
               <Card className="p-6 bg-gradient-to-br from-blue-900 to-indigo-900 border-white/10 hover:border-blue-400/50 transition-all cursor-pointer group overflow-hidden min-h-[120px]">
-                <div className="flex items-center justify-between relative z-10">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center group-hover:bg-white/90 transition-colors shadow-md">
-                      <Plus className="h-6 w-6 text-blue-900" />
-                    </div>
-                    <span className="text-white font-semibold text-lg">{t.newSession}</span>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center group-hover:bg-white/90 transition-colors shadow-md">
+                    <Plus className="h-6 w-6 text-blue-900" />
                   </div>
-                </div>
-                
-                {/* Character positioned on the right, overlapping */}
-                <div className="absolute right-0 top-0 bottom-0 flex items-end opacity-90 group-hover:opacity-100 transition-opacity -mr-4">
-                  <TonyCharacter />
+                  <span className="text-white font-semibold text-lg">{t.newSession}</span>
                 </div>
               </Card>
+            </div>
+          </div>
+
+          {/* Daily Motivation Quote Section */}
+          <div className="space-y-4 mb-6 mt-12">
+            <div className="flex items-center gap-2">
+              <Flower2 className="h-5 w-5 text-red-400" />
+              <h3 className="text-lg font-semibold text-white">{t.dailyMotivationQuote}</h3>
+            </div>
+            
+            <Card className="p-6 bg-gradient-to-br from-blue-950/80 to-indigo-950/80 border-white/10 backdrop-blur-sm relative overflow-hidden">
+              {/* Tulip/Flower icon at top center */}
+              <div className="flex justify-center mb-4">
+                <div className="w-8 h-8 flex items-center justify-center">
+                  <Flower2 className="h-6 w-6 text-white/80" />
+                </div>
+              </div>
+              
+              {/* Quote text */}
+              <p className="text-white text-center leading-relaxed text-base md:text-lg">
+                {t.motivationQuote}
+              </p>
+            </Card>
+          </div>
+
+          {/* Features List Section */}
+          <div className="space-y-3 mb-6 mt-12">
+            {/* Enable Notifications */}
+            <Card className="p-4 bg-gradient-to-br from-blue-950/60 to-indigo-950/60 border-white/10 backdrop-blur-sm hover:border-blue-400/50 transition-all cursor-pointer group">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors shrink-0">
+                  <Bell className="h-6 w-6 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-white mb-1">{t.enableNotifications}</h4>
+                  <p className="text-sm text-white/70 leading-relaxed">{t.enableNotificationsDesc}</p>
+                </div>
+                <div className="w-6 h-6 rounded-full border-2 border-white/30 flex items-center justify-center shrink-0 group-hover:border-white/50 transition-colors">
+                  <Circle className="h-4 w-4 text-transparent" />
+                </div>
+              </div>
+            </Card>
+
+            {/* Plant Life Tree */}
+            <Card className="p-4 bg-gradient-to-br from-blue-950/60 to-indigo-950/60 border-white/10 backdrop-blur-sm hover:border-green-400/50 transition-all cursor-pointer group">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors shrink-0">
+                  <TreePine className="h-6 w-6 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-white mb-1">{t.plantLifeTree}</h4>
+                  <p className="text-sm text-white/70 leading-relaxed">{t.plantLifeTreeDesc}</p>
+                </div>
+                <div className="w-6 h-6 rounded-full border-2 border-white/30 flex items-center justify-center shrink-0 group-hover:border-white/50 transition-colors">
+                  <Circle className="h-4 w-4 text-transparent" />
+                </div>
+              </div>
+            </Card>
+
+            {/* Join Community */}
+            <Card className="p-4 bg-gradient-to-br from-blue-950/60 to-indigo-950/60 border-white/10 backdrop-blur-sm hover:border-purple-400/50 transition-all cursor-pointer group">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors shrink-0">
+                  <MessageCircle className="h-6 w-6 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-white mb-1">{t.joinCommunity}</h4>
+                  <p className="text-sm text-white/70 leading-relaxed">{t.joinCommunityDesc}</p>
+                </div>
+                <div className="w-6 h-6 rounded-full border-2 border-white/30 flex items-center justify-center shrink-0 group-hover:border-white/50 transition-colors">
+                  <Circle className="h-4 w-4 text-transparent" />
+                </div>
+              </div>
+            </Card>
+
+            {/* Enable Content Blocker */}
+            <Card className="p-4 bg-gradient-to-br from-blue-950/60 to-indigo-950/60 border-white/10 backdrop-blur-sm hover:border-red-400/50 transition-all cursor-pointer group">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors shrink-0">
+                  <div className="relative">
+                    <Globe className="h-6 w-6 text-white" />
+                    <X className="h-4 w-4 text-red-400 absolute -top-1 -right-1" strokeWidth={3} />
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-white mb-1">{t.enableContentBlocker}</h4>
+                  <p className="text-sm text-white/70 leading-relaxed">{t.enableContentBlockerDesc}</p>
+                </div>
+                <div className="w-6 h-6 rounded-full border-2 border-white/30 flex items-center justify-center shrink-0 group-hover:border-white/50 transition-colors">
+                  <Circle className="h-4 w-4 text-transparent" />
+                </div>
+              </div>
+            </Card>
+
+            {/* Help & Learn from Others */}
+            <Card className="p-4 bg-gradient-to-br from-blue-950/60 to-indigo-950/60 border-white/10 backdrop-blur-sm hover:border-yellow-400/50 transition-all cursor-pointer group">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors shrink-0">
+                  <SquarePlus className="h-6 w-6 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-white mb-1">{t.helpAndLearn}</h4>
+                  <p className="text-sm text-white/70 leading-relaxed">{t.helpAndLearnDesc}</p>
+                </div>
+                <div className="w-6 h-6 rounded-full border-2 border-white/30 flex items-center justify-center shrink-0 group-hover:border-white/50 transition-colors">
+                  <Circle className="h-4 w-4 text-transparent" />
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Status Cards Section */}
+          <div className="grid grid-cols-2 gap-3 md:gap-4 mb-6 mt-12">
+            {/* On Track Card */}
+            <Card className="p-4 md:p-5 bg-gradient-to-br from-blue-950/50 to-indigo-950/50 border-white/10 backdrop-blur-sm">
+              <div className="flex flex-col items-center text-center space-y-2 md:space-y-3">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white flex items-center justify-center">
+                  <Check className="h-5 w-5 md:h-6 md:w-6 text-black" strokeWidth={3} />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs md:text-sm text-white/70">{t.onTrackToQuit}</p>
+                  <p className="text-base md:text-xl font-bold text-white">20 de Ago de 2025</p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Tempted to Relapse Card */}
+            <Card className="p-4 md:p-5 bg-gradient-to-br from-blue-950/50 to-indigo-950/50 border-white/10 backdrop-blur-sm">
+              <div className="flex flex-col items-center text-center space-y-2 md:space-y-3">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center relative">
+                  <div className="text-3xl md:text-4xl">🤩</div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs md:text-sm text-white/70">{t.temptedToRelapse}</p>
+                  <p className="text-base md:text-xl font-bold text-green-400">{t.falseText}</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* I'm Quitting Because Section */}
+          <Card className="p-5 mb-6 bg-gradient-to-br from-blue-950/60 to-indigo-950/60 border-white/10 backdrop-blur-sm">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                <HelpCircle className="h-6 w-6 text-blue-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-white mb-2">{t.imQuittingBecause}</h4>
+                <p className="text-white/70 text-sm mb-4 cursor-pointer hover:text-white transition-colors">
+                  {t.addReasonPlaceholder}
+                </p>
+                <div className="flex items-center justify-end gap-1 text-xs text-white/60">
+                  <Star className="h-3 w-3" />
+                  <span>{t.best} 19m</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* 28 Day Challenge Progress */}
+          <div className="space-y-2 mb-6">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white font-medium">{t.dayChallenge}</span>
+              <span className="text-white font-semibold">0%</span>
+            </div>
+            <div className="relative h-3 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-purple-900 to-purple-600 rounded-full transition-all duration-500"
+                style={{ width: "0%" }}
+              />
+            </div>
+          </div>
+
+          {/* Main Menu Section */}
+          <div className="space-y-4 mb-6 mt-12">
+            <h3 className="text-lg font-semibold text-white">{t.main}</h3>
+            
+            <div className="space-y-2">
+              {/* Save A Friend */}
+              <Card className="p-4 bg-gradient-to-br from-blue-950/60 to-indigo-950/60 border-white/10 backdrop-blur-sm hover:border-cyan-400/50 transition-all cursor-pointer group">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center group-hover:bg-cyan-500/30 transition-colors">
+                      <div className="relative w-5 h-5">
+                        <Users className="h-5 w-5 text-cyan-400 absolute" />
+                        <div className="absolute -top-1 -right-1 w-3 h-3 border-2 border-cyan-300 rounded-full" />
+                      </div>
+                    </div>
+                    <span className="text-white font-medium">{t.saveAFriend}</span>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-white/50" />
+                </div>
+              </Card>
+
+              {/* Talk to Tony */}
+              <Card className="p-4 bg-gradient-to-br from-blue-950/60 to-indigo-950/60 border-white/10 backdrop-blur-sm hover:border-orange-400/50 transition-all cursor-pointer group">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors">
+                      <div className="relative w-5 h-5">
+                        {/* Robot head shape */}
+                        <div className="w-5 h-5 rounded-sm border-2 border-orange-400 relative">
+                          {/* Eyes */}
+                          <div className="absolute top-1 left-1 w-1 h-1 bg-orange-400 rounded-full" />
+                          <div className="absolute top-1 right-1 w-1 h-1 bg-orange-400 rounded-full" />
+                          {/* Mouth lines */}
+                          <div className="absolute bottom-1 left-1 right-1 h-0.5 border-t border-orange-400" />
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-white font-medium">{t.talkToTony}</span>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-white/50" />
+                </div>
+              </Card>
+
+              {/* Reasons for Change */}
+              <Card className="p-4 bg-gradient-to-br from-blue-950/60 to-indigo-950/60 border-white/10 backdrop-blur-sm hover:border-pink-400/50 transition-all cursor-pointer group">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center group-hover:bg-pink-500/30 transition-colors">
+                      <div className="relative">
+                        <Heart className="h-5 w-5 text-pink-400" />
+                        <Hand className="h-3 w-3 text-pink-300 absolute -bottom-0.5 -right-0.5" />
+                      </div>
+                    </div>
+                    <span className="text-white font-medium">{t.reasonsForChange}</span>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-white/50" />
+                </div>
+              </Card>
+
+              {/* Chat */}
+              <Card className="p-4 bg-gradient-to-br from-blue-950/60 to-indigo-950/60 border-white/10 backdrop-blur-sm hover:border-green-400/50 transition-all cursor-pointer group">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center group-hover:bg-green-500/30 transition-colors">
+                      <MessageCircle className="h-5 w-5 text-green-400" />
+                    </div>
+                    <span className="text-white font-medium">{t.chat}</span>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-white/50" />
+                </div>
+              </Card>
+
+              {/* Learn */}
+              <Card className="p-4 bg-gradient-to-br from-blue-950/60 to-indigo-950/60 border-white/10 backdrop-blur-sm hover:border-orange-400/50 transition-all cursor-pointer group">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors">
+                      <BookOpen className="h-5 w-5 text-orange-400" />
+                    </div>
+                    <span className="text-white font-medium">{t.learn}</span>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-white/50" />
+                </div>
+              </Card>
+
+              {/* Milestones */}
+              <Card className="p-4 bg-gradient-to-br from-blue-950/60 to-indigo-950/60 border-white/10 backdrop-blur-sm hover:border-purple-400/50 transition-all cursor-pointer group">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
+                      <RotateCw className="h-5 w-5 text-purple-400" />
+                    </div>
+                    <span className="text-white font-medium">{t.milestones}</span>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-white/50" />
+                </div>
+              </Card>
+            </div>
+          </div>
+
+          {/* Mindfulness Section */}
+          <div className="space-y-4 mb-6 mt-12">
+            <Card className="p-5 bg-gradient-to-br from-blue-950/80 to-indigo-950/80 border-white/10 backdrop-blur-sm">
+              <h3 className="text-lg font-semibold text-white mb-4">{t.mindfulness}</h3>
+              
+              <div className="space-y-2">
+                {/* Side Effects */}
+                <div className="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center group-hover:bg-blue-500/30 transition-colors">
+                      <svg className="h-5 w-5 text-blue-400" viewBox="0 0 24 24" fill="currentColor">
+                        {/* Coração esquerdo */}
+                        <path d="M7 3C4.239 3 2 5.239 2 8c0 4.418 5.03 9.5 7 11.5 1.97-2 5-7.082 5-11.5 0-2.761-2.239-5-5-5-1.126 0-2.164.371-3 1.002C8.164 3.371 7.126 3 7 3z"/>
+                        {/* Coração direito */}
+                        <path d="M17 3c-2.761 0-5 2.239-5 5 0 4.418 5.03 9.5 7 11.5 1.97-2 5-7.082 5-11.5 0-2.761-2.239-5-5-5-1.126 0-2.164.371-3 1.002C18.164 3.371 17.126 3 17 3z"/>
+                      </svg>
+                    </div>
+                    <span className="text-white font-medium">{t.sideEffects}</span>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-white/50" />
+                </div>
+
+                {/* Motivation */}
+                <div className="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center group-hover:bg-green-500/30 transition-colors">
+                      <ClipboardList className="h-5 w-5 text-green-400" />
+                    </div>
+                    <span className="text-white font-medium">{t.motivation}</span>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-white/50" />
+                </div>
+
+                {/* Breath Exercise */}
+                <div className="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors">
+                      <Wind className="h-5 w-5 text-orange-400" />
+                    </div>
+                    <span className="text-white font-medium">{t.breathExercise}</span>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-white/50" />
+                </div>
+
+                {/* Success Stories */}
+                <div className="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition-colors">
+                      <Award className="h-5 w-5 text-yellow-400" />
+                    </div>
+                    <span className="text-white font-medium">{t.successStories}</span>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-white/50" />
+                </div>
+              </div>
+            </Card>
+
+            {/* Quote Section */}
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="mb-4">
+                <Quote className="h-12 w-12 text-cyan-400" />
+              </div>
+              <p className="text-white text-center text-lg md:text-xl font-medium leading-relaxed">
+                {t.quoteText}
+              </p>
             </div>
           </div>
         </main>
