@@ -58,7 +58,14 @@ export function useNotifications() {
         
         // Salva no Supabase se houver usuário (opcional, não bloqueia se falhar)
         try {
-          const { data: { user } } = await supabase.auth.getUser()
+          const { data: { user }, error: authError } = await supabase.auth.getUser()
+          if (authError) {
+            if (authError.message?.includes('Failed to fetch')) {
+              // Erro de rede, ignora silenciosamente
+              return
+            }
+            throw authError
+          }
           if (user) {
             // Tenta atualizar, mas não falha se a coluna não existir
             await supabase
@@ -68,12 +75,18 @@ export function useNotifications() {
               .then(() => {
                 // Sucesso
               })
-              .catch(() => {
-                // Ignora erro se coluna não existir
+              .catch((error: any) => {
+                // Ignora erro se coluna não existir ou erro de rede
+                if (!error?.message?.includes('Failed to fetch')) {
+                  console.warn("Error updating notifications:", error?.message)
+                }
               })
           }
-        } catch (error) {
-          // Ignora erros do Supabase, usa apenas localStorage
+        } catch (error: any) {
+          // Ignora erros de rede do Supabase, usa apenas localStorage
+          if (!error?.message?.includes('Failed to fetch') && error?.name !== 'TypeError') {
+            console.warn("Error saving notifications:", error?.message)
+          }
         }
 
         // Agenda notificações diárias
@@ -104,7 +117,14 @@ export function useNotifications() {
     
     // Tenta salvar no Supabase (opcional)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError) {
+        if (authError.message?.includes('Failed to fetch')) {
+          // Erro de rede, ignora silenciosamente
+          return
+        }
+        throw authError
+      }
       if (user) {
         await supabase
           .from("profiles")
@@ -113,12 +133,18 @@ export function useNotifications() {
           .then(() => {
             // Sucesso
           })
-          .catch(() => {
-            // Ignora erro se coluna não existir
+          .catch((error: any) => {
+            // Ignora erro se coluna não existir ou erro de rede
+            if (!error?.message?.includes('Failed to fetch')) {
+              console.warn("Error updating notifications:", error?.message)
+            }
           })
       }
-    } catch (error) {
-      // Ignora erros do Supabase
+    } catch (error: any) {
+      // Ignora erros de rede do Supabase
+      if (!error?.message?.includes('Failed to fetch') && error?.name !== 'TypeError') {
+        console.warn("Error saving notifications:", error?.message)
+      }
     }
 
     setState(prev => ({

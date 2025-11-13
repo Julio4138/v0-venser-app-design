@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { DesktopSidebar } from "@/components/desktop-sidebar"
 import { MobileNav } from "@/components/mobile-nav"
 import { MobileHeader } from "@/components/mobile-header"
@@ -30,6 +31,7 @@ export default function ToolsPage() {
   const [playingSound, setPlayingSound] = useState<string | null>(null)
   const t = translations[language]
   const { collapsed } = useSidebar()
+  const router = useRouter()
 
   // Custom breathing icon component
   const BreathingIcon = () => (
@@ -61,10 +63,14 @@ export default function ToolsPage() {
   ]
 
   const toolsList = [
-    { title: "Illusion Buster", icon: X, iconBg: "bg-pink-500", iconColor: "text-white", iconShape: "square" },
-    { title: "Dopamine Visualiser", icon: Diamond, iconBg: "bg-orange-500", iconColor: "text-white", iconShape: "diamond" },
-    { title: "Journal", icon: FileText, iconBg: "bg-yellow-500", iconColor: "text-white", iconShape: "square" },
+    { title: "Illusion Buster", icon: X, iconBg: "bg-pink-500", iconColor: "text-white", iconShape: "square", path: "/illusion-buster" },
+    { title: "Dopamine Visualiser", icon: Diamond, iconBg: "bg-orange-500", iconColor: "text-white", iconShape: "diamond", path: "/dopamine-visualiser" },
+    { title: "Journal", icon: FileText, iconBg: "bg-yellow-500", iconColor: "text-white", iconShape: "square", path: "/journal" },
   ]
+
+  const handleToolClick = (path: string) => {
+    router.push(path)
+  }
 
   return (
     <div className="min-h-screen tools-background relative">
@@ -175,7 +181,8 @@ export default function ToolsPage() {
                 return (
                   <div
                     key={tool.title}
-                    className="bg-black/20 backdrop-blur-md border border-white/10 rounded-xl px-4 py-4 flex items-center justify-between hover:bg-black/30 transition-all"
+                    className="bg-black/20 backdrop-blur-md border border-white/10 rounded-xl px-4 py-4 flex items-center justify-between hover:bg-black/30 transition-all cursor-pointer"
+                    onClick={() => handleToolClick(tool.path)}
                   >
                     <div className="flex items-center gap-3">
                       <div className={cn(
@@ -191,6 +198,10 @@ export default function ToolsPage() {
                       size="sm" 
                       variant="outline" 
                       className="bg-transparent border-white/20 text-white hover:bg-white/10"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleToolClick(tool.path)
+                      }}
                     >
                       Open
                     </Button>
