@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress"
 import { X, ArrowLeft, Lightbulb, AlertCircle, CheckCircle2, Sparkles, Eye, Brain, Trophy, Zap, Target, Flame, Star, Award, TrendingUp } from "lucide-react"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
+import { useIllusionBusterProgress } from "@/lib/use-illusion-buster-progress"
 
 interface Illusion {
   id: string
@@ -47,6 +48,7 @@ export default function IllusionBusterPage() {
   const t = translations[language]
   const { collapsed } = useSidebar()
   const router = useRouter()
+  const { progress, updateProgress, isLoading: isLoadingProgress } = useIllusionBusterProgress()
   
   const [selectedIllusion, setSelectedIllusion] = useState<Illusion | null>(null)
   const [viewedIllusions, setViewedIllusions] = useState<Set<string>>(new Set())
@@ -63,6 +65,7 @@ export default function IllusionBusterPage() {
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const animationFrameRef = useRef<number>()
   const previousModalOpen = useRef(false)
+  const hasLoadedFromDb = useRef(false)
 
   const XP_PER_LEVEL = 100
   const XP_PER_ILLUSION = 50
@@ -205,6 +208,42 @@ export default function IllusionBusterPage() {
     }
   ], [language])
 
+  // Carregar dados do banco quando o progresso for carregado
+  useEffect(() => {
+    if (!isLoadingProgress && progress && !hasLoadedFromDb.current) {
+      setXp(progress.illusion_buster_xp)
+      setLevel(progress.illusion_buster_level)
+      setCombo(progress.current_combo)
+      setStreak(progress.illusion_buster_streak)
+      setViewedIllusions(new Set(progress.destroyed_illusions))
+      setShownBadges(new Set(progress.earned_badges))
+      hasLoadedFromDb.current = true
+    }
+  }, [isLoadingProgress, progress])
+
+  // Salvar progresso no banco quando houver mudanças
+  useEffect(() => {
+    if (!hasLoadedFromDb.current) return // Não salvar durante o carregamento inicial
+
+    const saveProgress = async () => {
+      await updateProgress({
+        xp,
+        level,
+        destroyedIllusions: Array.from(viewedIllusions),
+        earnedBadges: Array.from(shownBadges),
+        combo,
+        streak
+      })
+    }
+
+    // Debounce para não salvar a cada mudança
+    const timer = setTimeout(() => {
+      saveProgress()
+    }, 1000) // Salva após 1 segundo de inatividade
+
+    return () => clearTimeout(timer)
+  }, [xp, level, viewedIllusions, shownBadges, combo, streak, updateProgress])
+
   // Calculate current level XP
   const currentLevelXp = xp % XP_PER_LEVEL
   const progressPercentage = (currentLevelXp / XP_PER_LEVEL) * 100
@@ -304,26 +343,37 @@ export default function IllusionBusterPage() {
         // Delay to ensure modal animation completes and user can read content
         const timer = setTimeout(() => {
           if (!selectedIllusion && !showBadge) {
-            setShownBadges(prev => new Set([...prev, badgeId!]))
+            const newShownBadges = new Set([...shownBadges, badgeId!])
+            setShownBadges(newShownBadges)
             setShowBadge(badgeToShow)
+            // Salvar badge no banco imediatamente
+            updateProgress({
+              earnedBadges: Array.from(newShownBadges)
+            })
           }
         }, 1000) // Increased delay to allow user to read
         return () => clearTimeout(timer)
       }
     }
-  }, [selectedIllusion, showBadge, viewedIllusions.size, combo, badges, shownBadges])
+  }, [selectedIllusion, showBadge, viewedIllusions.size, combo, badges, shownBadges, updateProgress])
 
   // Check level up - only show when modal is closed
   useEffect(() => {
     const newLevel = Math.floor(xp / XP_PER_LEVEL) + 1
-    if (newLevel > level && xp > 0 && !selectedIllusion && !showBadge) {
+    if (newLevel > level && xp > 0 && !selectedIllusion && !showBadge && hasLoadedFromDb.current) {
       setLevel(newLevel)
+      // Salvar nível no banco
+      updateProgress({
+        level: newLevel
+      })
+      
       const levelBadgeId = `levelup-${newLevel}`
       if (!shownBadges.has(levelBadgeId)) {
         // Delay to allow other badges to show first
         const timer = setTimeout(() => {
           if (!showBadge && !selectedIllusion) {
-            setShownBadges(prev => new Set([...prev, levelBadgeId]))
+            const newShownBadges = new Set([...shownBadges, levelBadgeId])
+            setShownBadges(newShownBadges)
             setShowBadge({
               id: levelBadgeId,
               title: language === "pt" ? "Subiu de Nível!" : language === "es" ? "¡Subiste de Nivel!" : "Level Up!",
@@ -331,12 +381,16 @@ export default function IllusionBusterPage() {
               icon: <TrendingUp className="h-8 w-8" />,
               color: "from-purple-500 to-indigo-500"
             })
+            // Salvar badge no banco imediatamente
+            updateProgress({
+              earnedBadges: Array.from(newShownBadges)
+            })
           }
         }, 500)
         return () => clearTimeout(timer)
       }
     }
-  }, [xp, level, language, showBadge, selectedIllusion, shownBadges])
+  }, [xp, level, language, showBadge, selectedIllusion, shownBadges, updateProgress])
 
   const handleDestroyIllusion = (illusion: Illusion) => {
     const cardElement = cardRefs.current.get(illusion.id)
@@ -360,10 +414,23 @@ export default function IllusionBusterPage() {
       const gainedXp = Math.floor(baseXp * comboMultiplier)
 
       // Update game state
-      setXp(prev => prev + gainedXp)
-      setCombo(prev => prev + 1)
-      setStreak(prev => prev + 1)
-      setViewedIllusions(prev => new Set([...prev, illusion.id]))
+      const newXp = xp + gainedXp
+      const newCombo = combo + 1
+      const newStreak = streak + 1
+      const newViewedIllusions = new Set([...viewedIllusions, illusion.id])
+      
+      setXp(newXp)
+      setCombo(newCombo)
+      setStreak(newStreak)
+      setViewedIllusions(newViewedIllusions)
+      
+      // Salvar no banco imediatamente
+      updateProgress({
+        xp: newXp,
+        destroyedIllusions: Array.from(newViewedIllusions),
+        combo: newCombo,
+        streak: newStreak
+      })
 
       // Show XP gain animation
       setShowXpGain({
