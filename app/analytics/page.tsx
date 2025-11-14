@@ -10,8 +10,10 @@ import { LineChartSimple } from "@/components/line-chart-simple"
 import { useLanguage } from "@/lib/language-context"
 import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Flame, Trophy, Brain, Zap, Award, Check, TreePine, Calendar, Target, CheckSquare, AlertTriangle, Smile, TrendingUp } from "lucide-react"
+import { Flame, Trophy, Brain, Zap, Award, Check, TreePine, Calendar, Target, CheckSquare, AlertTriangle, Smile, TrendingUp, Heart, Sparkles, ArrowRight, RefreshCw } from "lucide-react"
+import Link from "next/link"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
 import { TreeForest } from "@/components/tree-forest"
@@ -32,6 +34,12 @@ interface PlannerMetrics {
   moodDistribution: Record<string, number>
   plannerUsageData: number[]
   topTriggers: Array<{ text: string; count: number; intensity: string }>
+  daysWithReward: number
+  daysWithReflection: number
+  averageTasksPerDay: number
+  averageCompletionRate: number
+  recentReflections: Array<{ date: string; reflection: string }>
+  recentRewards: Array<{ date: string; reward: string }>
 }
 
 export default function AnalyticsPage() {
@@ -42,6 +50,7 @@ export default function AnalyticsPage() {
   const treeProgress = useTreeProgress()
   const [plannerMetrics, setPlannerMetrics] = useState<PlannerMetrics | null>(null)
   const [isLoadingPlanner, setIsLoadingPlanner] = useState(true)
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
 
   // Demo data
   const recoveryScore = 78
@@ -63,6 +72,40 @@ export default function AnalyticsPage() {
   // Load planner metrics
   useEffect(() => {
     loadPlannerMetrics()
+    
+    // Set up real-time subscription
+    let channel: any = null
+    
+    const setupSubscription = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      channel = supabase
+        .channel('planner-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'daily_planner',
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            // Reload metrics when planner data changes
+            loadPlannerMetrics()
+          }
+        )
+        .subscribe()
+    }
+
+    setupSubscription()
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period])
 
   const loadPlannerMetrics = async () => {
@@ -110,6 +153,10 @@ export default function AnalyticsPage() {
       const triggersByIntensity = { leve: 0, moderado: 0, forte: 0 }
       const moodDistribution: Record<string, number> = {}
       const triggerCounts: Record<string, { count: number; intensity: string }> = {}
+      let daysWithReward = 0
+      let daysWithReflection = 0
+      const recentReflections: Array<{ date: string; reflection: string }> = []
+      const recentRewards: Array<{ date: string; reward: string }> = []
 
       // Process each entry
       plannerEntries.forEach((entry) => {
@@ -141,7 +188,29 @@ export default function AnalyticsPage() {
         if (entry.mood) {
           moodDistribution[entry.mood] = (moodDistribution[entry.mood] || 0) + 1
         }
+
+        // Rewards
+        if (entry.reward && entry.reward.trim().length > 0) {
+          daysWithReward++
+          recentRewards.push({
+            date: entry.planner_date,
+            reward: entry.reward
+          })
+        }
+
+        // Reflections
+        if (entry.reflection && entry.reflection.trim().length > 0) {
+          daysWithReflection++
+          recentReflections.push({
+            date: entry.planner_date,
+            reflection: entry.reflection
+          })
+        }
       })
+
+      // Sort and limit recent items
+      recentReflections.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      recentRewards.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
       // Get top triggers
       const topTriggers = Object.entries(triggerCounts)
@@ -162,6 +231,9 @@ export default function AnalyticsPage() {
         plannerUsageData.push(hasEntry ? 1 : 0)
       }
 
+      const averageTasksPerDay = totalDays > 0 ? (totalTasks / totalDays) : 0
+      const averageCompletionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0
+
       setPlannerMetrics({
         totalDays,
         daysWithGoal,
@@ -172,7 +244,14 @@ export default function AnalyticsPage() {
         moodDistribution,
         plannerUsageData,
         topTriggers,
+        daysWithReward,
+        daysWithReflection,
+        averageTasksPerDay: Math.round(averageTasksPerDay * 10) / 10,
+        averageCompletionRate: Math.round(averageCompletionRate),
+        recentReflections: recentReflections.slice(0, 5),
+        recentRewards: recentRewards.slice(0, 5),
       })
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error loading planner metrics:", error)
     } finally {
@@ -372,6 +451,26 @@ export default function AnalyticsPage() {
                         : "Complete analysis of your daily planning"}
                   </p>
                 </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {lastUpdate && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                    <span>
+                      {language === "pt" 
+                        ? `Atualizado ${lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                        : language === "es"
+                        ? `Actualizado ${lastUpdate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
+                        : `Updated ${lastUpdate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`}
+                    </span>
+                  </div>
+                )}
+                <Link href="/planner">
+                  <Button className="bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] hover:opacity-90 transition-opacity">
+                    {language === "pt" ? "Abrir Planner" : language === "es" ? "Abrir Planificador" : "Open Planner"}
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </Link>
               </div>
             </div>
 
@@ -701,6 +800,148 @@ export default function AnalyticsPage() {
                           </p>
                         </div>
                       )}
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Additional Metrics - Rewards and Reflections */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mt-6">
+                  {/* Rewards Section */}
+                  <Card className="p-4 md:p-6 bg-gradient-to-br from-[oklch(0.68_0.18_45)]/5 to-transparent border-[oklch(0.68_0.18_45)]/20">
+                    <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
+                      <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg bg-gradient-to-br from-[oklch(0.68_0.18_45)] to-[oklch(0.68_0.18_45)]/70 flex items-center justify-center">
+                        <Trophy className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm md:text-base font-semibold">
+                          {language === "pt" ? "Recompensas" : language === "es" ? "Recompensas" : "Rewards"}
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          {language === "pt" ? "Dias com recompensas definidas" : language === "es" ? "Días con recompensas definidas" : "Days with rewards set"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30">
+                        <div>
+                          <p className="text-2xl md:text-3xl font-bold text-[oklch(0.68_0.18_45)]">
+                            {plannerMetrics.daysWithReward}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {language === "pt" ? "de" : language === "es" ? "de" : "of"} {plannerMetrics.totalDays} {language === "pt" ? "dias" : language === "es" ? "días" : "days"}
+                          </p>
+                        </div>
+                        <div className="h-16 w-16 rounded-full bg-gradient-to-br from-[oklch(0.68_0.18_45)]/20 to-[oklch(0.68_0.18_45)]/10 flex items-center justify-center">
+                          <Trophy className="h-8 w-8 text-[oklch(0.68_0.18_45)]" />
+                        </div>
+                      </div>
+                      {plannerMetrics.recentRewards.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase">
+                            {language === "pt" ? "Recompensas Recentes" : language === "es" ? "Recompensas Recientes" : "Recent Rewards"}
+                          </p>
+                          {plannerMetrics.recentRewards.map((reward, index) => (
+                            <div key={index} className="p-3 rounded-lg bg-muted/20 border border-white/5">
+                              <p className="text-xs text-muted-foreground mb-1">
+                                {new Date(reward.date).toLocaleDateString(language === "pt" ? "pt-BR" : language === "es" ? "es-ES" : "en-US", { day: "numeric", month: "short" })}
+                              </p>
+                              <p className="text-sm font-medium">{reward.reward}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+
+                  {/* Reflections Section */}
+                  <Card className="p-4 md:p-6 bg-gradient-to-br from-[oklch(0.54_0.18_285)]/5 to-transparent border-[oklch(0.54_0.18_285)]/20">
+                    <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
+                      <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.54_0.18_285)]/70 flex items-center justify-center">
+                        <Heart className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm md:text-base font-semibold">
+                          {language === "pt" ? "Reflexões" : language === "es" ? "Reflexiones" : "Reflections"}
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          {language === "pt" ? "Dias com reflexões registradas" : language === "es" ? "Días con reflexiones registradas" : "Days with reflections recorded"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30">
+                        <div>
+                          <p className="text-2xl md:text-3xl font-bold text-[oklch(0.54_0.18_285)]">
+                            {plannerMetrics.daysWithReflection}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {language === "pt" ? "de" : language === "es" ? "de" : "of"} {plannerMetrics.totalDays} {language === "pt" ? "dias" : language === "es" ? "días" : "days"}
+                          </p>
+                        </div>
+                        <div className="h-16 w-16 rounded-full bg-gradient-to-br from-[oklch(0.54_0.18_285)]/20 to-[oklch(0.54_0.18_285)]/10 flex items-center justify-center">
+                          <Heart className="h-8 w-8 text-[oklch(0.54_0.18_285)]" />
+                        </div>
+                      </div>
+                      {plannerMetrics.recentReflections.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase">
+                            {language === "pt" ? "Reflexões Recentes" : language === "es" ? "Reflexiones Recientes" : "Recent Reflections"}
+                          </p>
+                          {plannerMetrics.recentReflections.map((reflection, index) => (
+                            <div key={index} className="p-3 rounded-lg bg-muted/20 border border-white/5">
+                              <p className="text-xs text-muted-foreground mb-1">
+                                {new Date(reflection.date).toLocaleDateString(language === "pt" ? "pt-BR" : language === "es" ? "es-ES" : "en-US", { day: "numeric", month: "short" })}
+                              </p>
+                              <p className="text-sm line-clamp-2">{reflection.reflection}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Performance Metrics */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mt-6">
+                  <Card className="p-4 md:p-6 bg-gradient-to-br from-[oklch(0.7_0.15_220)]/5 to-transparent border-[oklch(0.7_0.15_220)]/20">
+                    <div className="flex items-center gap-2 md:gap-3 mb-4">
+                      <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg bg-gradient-to-br from-[oklch(0.7_0.15_220)] to-[oklch(0.7_0.15_220)]/70 flex items-center justify-center">
+                        <CheckSquare className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm md:text-base font-semibold">
+                          {language === "pt" ? "Média de Tarefas por Dia" : language === "es" ? "Promedio de Tareas por Día" : "Average Tasks per Day"}
+                        </h4>
+                      </div>
+                    </div>
+                    <div className="text-center py-6">
+                      <p className="text-4xl md:text-5xl font-bold text-[oklch(0.7_0.15_220)]">
+                        {plannerMetrics.averageTasksPerDay}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {language === "pt" ? "tarefas por dia" : language === "es" ? "tareas por día" : "tasks per day"}
+                      </p>
+                    </div>
+                  </Card>
+
+                  <Card className="p-4 md:p-6 bg-gradient-to-br from-[oklch(0.68_0.18_45)]/5 to-transparent border-[oklch(0.68_0.18_45)]/20">
+                    <div className="flex items-center gap-2 md:gap-3 mb-4">
+                      <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg bg-gradient-to-br from-[oklch(0.68_0.18_45)] to-[oklch(0.68_0.18_45)]/70 flex items-center justify-center">
+                        <TrendingUp className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm md:text-base font-semibold">
+                          {language === "pt" ? "Taxa de Conclusão" : language === "es" ? "Tasa de Finalización" : "Completion Rate"}
+                        </h4>
+                      </div>
+                    </div>
+                    <div className="text-center py-6">
+                      <p className="text-4xl md:text-5xl font-bold text-[oklch(0.68_0.18_45)]">
+                        {plannerMetrics.averageCompletionRate}%
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {language === "pt" ? "de tarefas completadas" : language === "es" ? "de tareas completadas" : "of tasks completed"}
+                      </p>
                     </div>
                   </Card>
                 </div>

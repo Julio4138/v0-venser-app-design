@@ -186,3 +186,5 @@ Execute a migração SQL no Supabase:
 
 
 
+
+

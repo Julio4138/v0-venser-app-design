@@ -12,9 +12,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Progress } from "@/components/ui/progress"
 import { useSidebar } from "@/lib/sidebar-context"
 import { supabase } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
+import { ProgressRing } from "@/components/progress-ring"
 import { 
   Target, 
   CheckSquare, 
@@ -26,9 +28,17 @@ import {
   Trash2, 
   Save,
   Calendar,
-  Sparkles
+  Sparkles,
+  Flame,
+  TrendingUp,
+  MessageCircle,
+  CheckCircle2,
+  AlertTriangle,
+  Brain,
+  Award
 } from "lucide-react"
 import { toast } from "sonner"
+import Link from "next/link"
 
 interface Task {
   id: string
@@ -54,29 +64,35 @@ interface DailyPlannerData {
 const getMoodOptions = (language: string) => {
   if (language === "pt") {
     return [
-      { emoji: "😞", label: "Triste" },
-      { emoji: "😐", label: "Neutro" },
-      { emoji: "🙂", label: "Bem" },
-      { emoji: "😄", label: "Feliz" },
-      { emoji: "😎", label: "Excelente" },
+      { emoji: "😞", label: "Triste", message: "Dias difíceis também constroem força." },
+      { emoji: "😐", label: "Neutro", message: "Você está equilibrado. Continue firme." },
+      { emoji: "🙂", label: "Bem", message: "Você está equilibrado. Continue firme." },
+      { emoji: "😄", label: "Feliz", message: "Essa energia é o combustível do seu propósito." },
+      { emoji: "😎", label: "Excelente", message: "Essa energia é o combustível do seu propósito." },
     ]
   } else if (language === "es") {
     return [
-      { emoji: "😞", label: "Triste" },
-      { emoji: "😐", label: "Neutral" },
-      { emoji: "🙂", label: "Bien" },
-      { emoji: "😄", label: "Feliz" },
-      { emoji: "😎", label: "Excelente" },
+      { emoji: "😞", label: "Triste", message: "Los días difíciles también construyen fuerza." },
+      { emoji: "😐", label: "Neutral", message: "Estás equilibrado. Sigue firme." },
+      { emoji: "🙂", label: "Bien", message: "Estás equilibrado. Sigue firme." },
+      { emoji: "😄", label: "Feliz", message: "Esta energía es el combustible de tu propósito." },
+      { emoji: "😎", label: "Excelente", message: "Esta energía es el combustible de tu propósito." },
     ]
   } else {
     return [
-      { emoji: "😞", label: "Sad" },
-      { emoji: "😐", label: "Neutral" },
-      { emoji: "🙂", label: "Good" },
-      { emoji: "😄", label: "Happy" },
-      { emoji: "😎", label: "Excellent" },
+      { emoji: "😞", label: "Sad", message: "Difficult days also build strength." },
+      { emoji: "😐", label: "Neutral", message: "You are balanced. Stay firm." },
+      { emoji: "🙂", label: "Good", message: "You are balanced. Stay firm." },
+      { emoji: "😄", label: "Happy", message: "This energy is the fuel of your purpose." },
+      { emoji: "😎", label: "Excellent", message: "This energy is the fuel of your purpose." },
     ]
   }
+}
+
+const getMoodMessage = (emoji: string, language: string): string => {
+  const options = getMoodOptions(language)
+  const mood = options.find(m => m.emoji === emoji)
+  return mood?.message || ""
 }
 
 export default function PlannerPage() {
@@ -99,6 +115,48 @@ export default function PlannerPage() {
   const [newTaskText, setNewTaskText] = useState("")
   const [newTriggerText, setNewTriggerText] = useState("")
   const [newTriggerIntensity, setNewTriggerIntensity] = useState<"leve" | "moderado" | "forte">("leve")
+  const [userProgress, setUserProgress] = useState({
+    currentStreak: 0,
+    totalDaysClean: 0,
+    completionRate: 0,
+  })
+  const [tonyMessage, setTonyMessage] = useState("")
+  const [showTonyInteraction, setShowTonyInteraction] = useState(false)
+  const [goalFeedback, setGoalFeedback] = useState(false)
+  const [goalWasEmpty, setGoalWasEmpty] = useState(true)
+  const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(new Set())
+  const [allTasksCompletedShown, setAllTasksCompletedShown] = useState(false)
+  const [triggerFeedbackShown, setTriggerFeedbackShown] = useState<Set<string>>(new Set())
+  const [reflectionActive, setReflectionActive] = useState(false)
+  const [selectedMoodMessage, setSelectedMoodMessage] = useState("")
+  const [tonyFinalMessageShown, setTonyFinalMessageShown] = useState(false)
+
+  // Load user progress
+  const loadUserProgress = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      const { data: progress } = await supabase
+        .from("user_progress")
+        .select("current_streak, total_days_clean, longest_streak")
+        .eq("user_id", user.id)
+        .single()
+
+      if (progress) {
+        setUserProgress({
+          currentStreak: progress.current_streak || 0,
+          totalDaysClean: progress.total_days_clean || 0,
+          completionRate: progress.total_days_clean > 0 ? Math.min(100, (progress.current_streak / progress.total_days_clean) * 100) : 0,
+        })
+      }
+    } catch (error) {
+      console.error("Error loading user progress:", error)
+    }
+  }, [])
 
   // Load planner data
   const loadPlannerData = useCallback(async () => {
@@ -136,6 +194,15 @@ export default function PlannerPage() {
           mood: data.mood || null,
         })
         setLastSaved(new Date(data.updated_at))
+        // If goal already exists, don't show feedback on next blur
+        setGoalWasEmpty(!data.daily_goal || data.daily_goal.trim() === "")
+        // If reflection already exists, activate the reflection state
+        setReflectionActive(!!(data.reflection && data.reflection.trim().length > 0))
+        // If mood exists, set the selected message
+        if (data.mood) {
+          const moodMessage = getMoodMessage(data.mood, language)
+          setSelectedMoodMessage(moodMessage)
+        }
       } else {
         // Initialize empty planner
         setPlannerData({
@@ -146,6 +213,8 @@ export default function PlannerPage() {
           reflection: null,
           mood: null,
         })
+        setGoalWasEmpty(true)
+        setReflectionActive(false)
       }
     } catch (error) {
       console.error("Error loading planner data:", error)
@@ -157,7 +226,8 @@ export default function PlannerPage() {
 
   useEffect(() => {
     loadPlannerData()
-  }, [loadPlannerData])
+    loadUserProgress()
+  }, [loadPlannerData, loadUserProgress])
 
   // Auto-save with debounce
   useEffect(() => {
@@ -242,6 +312,36 @@ export default function PlannerPage() {
     }
   }
 
+  // Play subtle "pop" sound when completing a task
+  const playCompletionSound = useCallback(() => {
+    try {
+      // Check if AudioContext is available
+      if (typeof window === "undefined") return
+      
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioContextClass) return
+
+      const audioContext = new AudioContextClass()
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+
+      oscillator.frequency.value = 800
+      oscillator.type = "sine"
+
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1)
+
+      oscillator.start(audioContext.currentTime)
+      oscillator.stop(audioContext.currentTime + 0.1)
+    } catch (error) {
+      // Silently fail if audio context is not available
+      console.debug("Audio not available")
+    }
+  }, [])
+
   const addTask = () => {
     if (!newTaskText.trim()) return
 
@@ -260,12 +360,35 @@ export default function PlannerPage() {
   }
 
   const toggleTask = (taskId: string) => {
+    const task = plannerData.tasks.find(t => t.id === taskId)
+    const isCompleting = task && !task.completed
+    const isUncompleting = task && task.completed
+
     setPlannerData({
       ...plannerData,
       tasks: plannerData.tasks.map((task) =>
         task.id === taskId ? { ...task, completed: !task.completed } : task
       ),
     })
+
+    // Play sound and add visual feedback when completing a task
+    if (isCompleting) {
+      playCompletionSound()
+      setCompletedTaskIds(prev => new Set([...prev, taskId]))
+      // Remove from set after animation completes
+      setTimeout(() => {
+        setCompletedTaskIds(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(taskId)
+          return newSet
+        })
+      }, 1000)
+    }
+
+    // Reset all tasks completed flag if uncompleting
+    if (isUncompleting) {
+      setAllTasksCompletedShown(false)
+    }
   }
 
   const deleteTask = (taskId: string) => {
@@ -289,6 +412,25 @@ export default function PlannerPage() {
       triggers: [...plannerData.triggers, newTrigger],
     })
 
+    // Show feedback message when trigger is added
+    setTimeout(() => {
+      toast.success(
+        language === "pt" 
+          ? "Perceber o gatilho já é 50% do controle. 🎯"
+          : language === "es"
+          ? "Reconocer el gatillo ya es 50% del control. 🎯"
+          : "Recognizing the trigger is already 50% of control. 🎯",
+        {
+          duration: 4000,
+          style: {
+            background: "linear-gradient(to right, oklch(0.7 0.18 30), oklch(0.68 0.18 45))",
+            color: "white",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+          },
+        }
+      )
+    }, 300)
+
     setNewTriggerText("")
     setNewTriggerIntensity("leve")
   }
@@ -307,6 +449,28 @@ export default function PlannerPage() {
         trigger.id === triggerId ? { ...trigger, intensity } : trigger
       ),
     })
+
+    // Show feedback message when intensity is set for the first time
+    if (!triggerFeedbackShown.has(triggerId)) {
+      setTriggerFeedbackShown(prev => new Set([...prev, triggerId]))
+      setTimeout(() => {
+        toast.success(
+          language === "pt" 
+            ? "Perceber o gatilho já é 50% do controle. 🎯"
+            : language === "es"
+            ? "Reconocer el gatillo ya es 50% del control. 🎯"
+            : "Recognizing the trigger is already 50% of control. 🎯",
+          {
+            duration: 4000,
+            style: {
+              background: "linear-gradient(to right, oklch(0.7 0.18 30), oklch(0.68 0.18 45))",
+              color: "white",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+            },
+          }
+        )
+      }, 300)
+    }
   }
 
   const getIntensityColor = (intensity: "leve" | "moderado" | "forte") => {
@@ -319,6 +483,158 @@ export default function PlannerPage() {
         return "bg-red-500/20 text-red-400 border-red-500/30"
     }
   }
+
+  const getIntensityCardColor = (intensity: "leve" | "moderado" | "forte") => {
+    switch (intensity) {
+      case "leve":
+        return "from-green-500/10 to-green-500/5 border-green-500/20"
+      case "moderado":
+        return "from-yellow-500/10 to-yellow-500/5 border-yellow-500/20"
+      case "forte":
+        return "from-red-500/10 to-red-500/5 border-red-500/20"
+    }
+  }
+
+  // Calculate daily completion progress
+  const calculateDailyProgress = () => {
+    const totalItems = 1 + plannerData.tasks.length + plannerData.triggers.length + (plannerData.reward ? 1 : 0) + (plannerData.reflection ? 1 : 0) + (plannerData.mood ? 1 : 0)
+    const completedItems = (plannerData.daily_goal ? 1 : 0) + 
+      plannerData.tasks.filter(t => t.completed).length + 
+      plannerData.triggers.length + 
+      (plannerData.reward ? 1 : 0) + 
+      (plannerData.reflection ? 1 : 0) + 
+      (plannerData.mood ? 1 : 0)
+    return totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
+  }
+
+  const dailyProgress = calculateDailyProgress()
+
+  // Generate Tony's motivational message
+  const generateTonyMessage = () => {
+    const progress = dailyProgress
+    const hasGoal = !!plannerData.daily_goal
+    const completedTasks = plannerData.tasks.filter(t => t.completed).length
+    const totalTasks = plannerData.tasks.length
+
+    if (language === "pt") {
+      if (progress === 100) {
+        return "Incrível! Você completou tudo hoje! 🎉 Cada passo que você dá está fortalecendo sua jornada. Continue assim, você está no caminho certo!"
+      } else if (progress >= 70) {
+        return "Excelente progresso! Você está quase lá! 💪 Lembre-se: pequenos passos consistentes levam a grandes transformações. Continue!"
+      } else if (hasGoal && completedTasks > 0) {
+        return "Bom trabalho até agora! 🌟 Você já definiu seu objetivo e está completando tarefas. Isso é progresso real! Continue avançando."
+      } else if (hasGoal) {
+        return "Ótimo começo! Você já definiu seu objetivo do dia. Agora é hora de transformar esse objetivo em ação. Você consegue! 🚀"
+      } else {
+        return "Olá! Estou aqui para te apoiar na sua jornada. Comece definindo seu objetivo do dia - isso vai te dar direção e propósito. Vamos juntos! 💚"
+      }
+    } else if (language === "es") {
+      if (progress === 100) {
+        return "¡Increíble! ¡Completaste todo hoy! 🎉 Cada paso que das está fortaleciendo tu viaje. ¡Sigue así, vas por buen camino!"
+      } else if (progress >= 70) {
+        return "¡Excelente progreso! ¡Ya casi estás ahí! 💪 Recuerda: pequeños pasos consistentes llevan a grandes transformaciones. ¡Continúa!"
+      } else if (hasGoal && completedTasks > 0) {
+        return "¡Buen trabajo hasta ahora! 🌟 Ya definiste tu objetivo y estás completando tareas. ¡Eso es progreso real! Sigue avanzando."
+      } else if (hasGoal) {
+        return "¡Buen comienzo! Ya definiste tu objetivo del día. Ahora es hora de transformar ese objetivo en acción. ¡Tú puedes! 🚀"
+      } else {
+        return "¡Hola! Estoy aquí para apoyarte en tu viaje. Comienza definiendo tu objetivo del día - esto te dará dirección y propósito. ¡Vamos juntos! 💚"
+      }
+    } else {
+      if (progress === 100) {
+        return "Amazing! You've completed everything today! 🎉 Every step you take is strengthening your journey. Keep going, you're on the right track!"
+      } else if (progress >= 70) {
+        return "Excellent progress! You're almost there! 💪 Remember: small consistent steps lead to great transformations. Keep going!"
+      } else if (hasGoal && completedTasks > 0) {
+        return "Good work so far! 🌟 You've already set your goal and are completing tasks. That's real progress! Keep moving forward."
+      } else if (hasGoal) {
+        return "Great start! You've already set your daily goal. Now it's time to turn that goal into action. You've got this! 🚀"
+      } else {
+        return "Hello! I'm here to support you on your journey. Start by setting your daily goal - this will give you direction and purpose. Let's go together! 💚"
+      }
+    }
+  }
+
+  // Generate Tony's final message when all fields are completed
+  const generateTonyFinalMessage = () => {
+    if (language === "pt") {
+      return "Anotei suas evoluções de hoje. Você está se tornando alguém que domina a si mesmo. Amanhã, continue com essa clareza. 💪"
+    } else if (language === "es") {
+      return "Anoté tus evoluciones de hoy. Te estás convirtiendo en alguien que se domina a sí mismo. Mañana, continúa con esa claridad. 💪"
+    } else {
+      return "I've noted your progress today. You're becoming someone who masters themselves. Tomorrow, continue with this clarity. 💪"
+    }
+  }
+
+  useEffect(() => {
+    const message = generateTonyMessage()
+    setTonyMessage(message)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plannerData, language])
+
+  // Check if all fields are completed and show Tony's final message
+  useEffect(() => {
+    const hasGoal = !!plannerData.daily_goal && plannerData.daily_goal.trim().length > 0
+    const hasTasks = plannerData.tasks.length > 0
+    const hasTriggers = plannerData.triggers.length > 0
+    const hasReward = !!plannerData.reward && plannerData.reward.trim().length > 0
+    const hasReflection = !!plannerData.reflection && plannerData.reflection.trim().length > 0
+    const hasMood = !!plannerData.mood
+
+    const allFieldsCompleted = hasGoal && hasTasks && hasTriggers && hasReward && hasReflection && hasMood
+
+    if (allFieldsCompleted && !tonyFinalMessageShown) {
+      setTonyFinalMessageShown(true)
+      setTimeout(() => {
+        const finalMessage = generateTonyFinalMessage()
+        toast.success(
+          finalMessage,
+          {
+            duration: 8000,
+            style: {
+              background: "linear-gradient(to right, oklch(0.54 0.18 285), oklch(0.7 0.15 220))",
+              color: "white",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              fontSize: "16px",
+              padding: "16px",
+            },
+          }
+        )
+        // Update Tony's message in the card
+        setTonyMessage(finalMessage)
+      }, 1000)
+    } else if (!allFieldsCompleted) {
+      setTonyFinalMessageShown(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plannerData, tonyFinalMessageShown, language])
+
+  // Check if all tasks are completed
+  useEffect(() => {
+    if (plannerData.tasks.length > 0) {
+      const allCompleted = plannerData.tasks.every(task => task.completed)
+      if (allCompleted && !allTasksCompletedShown) {
+        setAllTasksCompletedShown(true)
+        setTimeout(() => {
+          toast.success(
+            language === "pt" 
+              ? "Você cumpriu sua palavra hoje. Isso é raro — e poderoso. 💪"
+              : "You kept your word today. That's rare — and powerful. 💪",
+            {
+              duration: 5000,
+              style: {
+                background: "linear-gradient(to right, oklch(0.68 0.18 45), oklch(0.7 0.18 30))",
+                color: "white",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+              },
+            }
+          )
+        }, 500)
+      } else if (!allCompleted) {
+        setAllTasksCompletedShown(false)
+      }
+    }
+  }, [plannerData.tasks, allTasksCompletedShown, language])
 
   if (isLoading) {
     return (
@@ -339,18 +655,18 @@ export default function PlannerPage() {
       <DesktopSidebar />
 
       <div className={cn(collapsed ? "md:ml-20 lg:ml-20" : "md:ml-56 lg:ml-64", "relative z-10")}>
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 md:px-8 pt-20 md:pt-8 py-6 md:py-8 space-y-6 pb-20 md:pb-8 relative z-10">
-          {/* Header */}
-          <div className="flex items-center justify-between">
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 md:px-8 pt-20 md:pt-8 py-6 md:py-8 space-y-6 pb-20 md:pb-8 relative z-10">
+          {/* Header with Title */}
+          <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-3xl md:text-4xl font-bold flex items-center gap-3">
-                <Sparkles className="h-8 w-8 text-[oklch(0.68_0.18_45)]" />
+                <Brain className="h-8 w-8 text-[oklch(0.68_0.18_45)] animate-pulse" />
                 {t.dailyPlanner}
               </h1>
               <p className="text-sm text-muted-foreground mt-2">
                 {language === "pt"
-                  ? "Organize seu dia, identifique gatilhos e celebre suas conquistas"
-                  : "Organize your day, identify triggers and celebrate your achievements"}
+                  ? "Baseado em neurociência e design emocional para sua jornada de transformação"
+                  : "Based on neuroscience and emotional design for your transformation journey"}
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -361,84 +677,217 @@ export default function PlannerPage() {
                 </span>
               )}
               {lastSaved && !isSaving && (
-                <span className="text-xs text-green-400/80 flex items-center gap-2">
-                  <Save className="h-3 w-3" />
+                <span className="text-xs text-green-400/80 flex items-center gap-2 animate-fade-in">
+                  <CheckCircle2 className="h-3 w-3" />
                   {t.saved}
                 </span>
               )}
-              <Button
-                onClick={savePlannerData}
-                size="sm"
-                className="bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)]"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {t.saved}
-              </Button>
             </div>
           </div>
 
-          {/* Planner Sections */}
-          <div className="space-y-6">
-            {/* Daily Goal */}
-            <Card className="p-6 venser-card-glow bg-gradient-to-br from-[oklch(0.54_0.18_285)]/10 to-[oklch(0.7_0.15_220)]/10 border-[oklch(0.54_0.18_285)]/20">
-              <div className="flex items-start gap-4">
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shrink-0">
-                  <Target className="h-6 w-6 text-white" />
+          {/* 1. Cabeçalho de Progresso Diário - Primeira seção emocional */}
+          <Card className="p-6 md:p-8 venser-card-glow bg-gradient-to-br from-[oklch(0.54_0.18_285)]/20 via-[oklch(0.7_0.15_220)]/20 to-[oklch(0.68_0.18_45)]/20 border-[oklch(0.54_0.18_285)]/30 backdrop-blur-sm">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex-1 space-y-4">
+                <div className="flex items-center gap-3">
+                  <TrendingUp className="h-6 w-6 text-[oklch(0.68_0.18_45)]" />
+                  <h2 className="text-2xl font-bold">
+                    {language === "pt" ? "Progresso de Hoje" : "Today's Progress"}
+                  </h2>
                 </div>
-                <div className="flex-1 space-y-2">
-                  <h2 className="text-xl font-semibold">{t.dailyGoal}</h2>
-                  <Textarea
-                    value={plannerData.daily_goal || ""}
-                    onChange={(e) =>
-                      setPlannerData({ ...plannerData, daily_goal: e.target.value })
-                    }
-                    placeholder={t.dailyGoalPlaceholder}
-                    className="min-h-[80px] bg-background/50 border-white/10 focus:border-[oklch(0.54_0.18_285)]/50"
-                  />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      {language === "pt" ? "Completado hoje" : "Completed today"}
+                    </span>
+                    <span className="text-lg font-semibold text-[oklch(0.68_0.18_45)]">
+                      {dailyProgress}%
+                    </span>
+                  </div>
+                  <Progress value={dailyProgress} className="h-3 bg-background/30" />
+                </div>
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div className="flex items-center gap-2">
+                    <Flame className="h-5 w-5 text-orange-400" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        {language === "pt" ? "Sequência" : "Streak"}
+                      </p>
+                      <p className="text-xl font-bold text-orange-400">
+                        {userProgress.currentStreak} {language === "pt" ? "dias" : "days"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Award className="h-5 w-5 text-[oklch(0.68_0.18_45)]" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        {language === "pt" ? "Total de dias" : "Total days"}
+                      </p>
+                      <p className="text-xl font-bold text-[oklch(0.68_0.18_45)]">
+                        {userProgress.totalDaysClean}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </Card>
+              <div className="flex-shrink-0">
+                <ProgressRing progress={dailyProgress} size={120}>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-[oklch(0.68_0.18_45)]">
+                      {dailyProgress}%
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {language === "pt" ? "do dia" : "of day"}
+                    </div>
+                  </div>
+                </ProgressRing>
+              </div>
+            </div>
+          </Card>
 
-            {/* Tasks */}
-            <Card className="p-6 venser-card-glow bg-gradient-to-br from-[oklch(0.68_0.18_45)]/10 to-[oklch(0.7_0.18_30)]/10 border-[oklch(0.68_0.18_45)]/20">
-              <div className="flex items-start gap-4">
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[oklch(0.68_0.18_45)] to-[oklch(0.7_0.18_30)] flex items-center justify-center shrink-0">
-                  <CheckSquare className="h-6 w-6 text-white" />
+          {/* 2. Objetivo do Dia - Planejar */}
+          <Card className="p-6 md:p-7 venser-card-glow bg-gradient-to-br from-[oklch(0.54_0.18_285)]/15 to-[oklch(0.7_0.15_220)]/15 border-[oklch(0.54_0.18_285)]/25 hover:border-[oklch(0.54_0.18_285)]/40 transition-all duration-300">
+            <div className="flex items-start gap-4">
+              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shrink-0 shadow-lg">
+                <Target className="h-7 w-7 text-white" />
+              </div>
+              <div className="flex-1 space-y-3">
+                <div>
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    {t.dailyGoal}
+                    {plannerData.daily_goal && (
+                      <CheckCircle2 className="h-5 w-5 text-green-400 animate-in fade-in" />
+                    )}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {language === "pt" 
+                      ? "Defina seu propósito para hoje - isso guiará suas ações"
+                      : "Set your purpose for today - this will guide your actions"}
+                  </p>
                 </div>
-                <div className="flex-1 space-y-4">
-                  <h2 className="text-xl font-semibold">{t.tasks}</h2>
+                <div className="relative">
+                  <Textarea
+                    value={plannerData.daily_goal || ""}
+                    onChange={(e) => {
+                      const newValue = e.target.value
+                      setPlannerData({ ...plannerData, daily_goal: newValue })
+                      // Track if goal was empty before
+                      if (!plannerData.daily_goal || plannerData.daily_goal.trim() === "") {
+                        setGoalWasEmpty(true)
+                      }
+                    }}
+                    onFocus={() => {
+                      // Check if goal is currently empty when focusing
+                      setGoalWasEmpty(!plannerData.daily_goal || plannerData.daily_goal.trim() === "")
+                    }}
+                    onBlur={(e) => {
+                      const hasValue = e.target.value.trim().length > 0
+                      // Only show feedback if goal was empty and now has value
+                      if (hasValue && goalWasEmpty && !goalFeedback) {
+                        setGoalFeedback(true)
+                        toast.success(
+                          language === "pt" 
+                            ? "Objetivo definido. Agora o dia tem direção. 🎯"
+                            : "Goal set. Now the day has direction. 🎯",
+                          {
+                            duration: 4000,
+                            style: {
+                              background: "linear-gradient(to right, oklch(0.54 0.18 285), oklch(0.7 0.15 220))",
+                              color: "white",
+                              border: "1px solid rgba(255, 255, 255, 0.2)",
+                            },
+                          }
+                        )
+                        setTimeout(() => {
+                          setGoalFeedback(false)
+                          setGoalWasEmpty(false)
+                        }, 2000)
+                      }
+                    }}
+                    placeholder={t.dailyGoalPlaceholder}
+                    className={cn(
+                      "min-h-[100px] bg-background/50 border-white/10 focus:border-[oklch(0.54_0.18_285)]/50 transition-all",
+                      goalFeedback && "animate-pulse shadow-lg shadow-[oklch(0.54_0.18_285)]/50"
+                    )}
+                  />
+                  {goalFeedback && (
+                    <div className="absolute inset-0 pointer-events-none rounded-lg bg-gradient-to-r from-[oklch(0.54_0.18_285)]/20 via-transparent to-[oklch(0.7_0.15_220)]/20 animate-pulse" />
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* 3. Tarefas - Executar */}
+          <Card className="p-6 md:p-7 venser-card-glow bg-gradient-to-br from-[oklch(0.68_0.18_45)]/15 to-[oklch(0.7_0.18_30)]/15 border-[oklch(0.68_0.18_45)]/25 hover:border-[oklch(0.68_0.18_45)]/40 transition-all duration-300">
+            <div className="flex items-start gap-4">
+              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-[oklch(0.68_0.18_45)] to-[oklch(0.7_0.18_30)] flex items-center justify-center shrink-0 shadow-lg">
+                <CheckSquare className="h-7 w-7 text-white" />
+              </div>
+              <div className="flex-1 space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    {t.tasks}
+                    {plannerData.tasks.length > 0 && (
+                      <span className="text-sm font-normal text-muted-foreground">
+                        ({plannerData.tasks.filter(t => t.completed).length}/{plannerData.tasks.length})
+                      </span>
+                    )}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {language === "pt" 
+                      ? "Transforme seu objetivo em ações concretas"
+                      : "Turn your goal into concrete actions"}
+                  </p>
+                </div>
                   
-                  {/* Task List */}
-                  <div className="space-y-2">
-                    {plannerData.tasks.map((task) => (
-                      <div
-                        key={task.id}
-                        className="flex items-center gap-3 p-3 rounded-lg bg-background/30 border border-white/10 hover:border-white/20 transition-colors"
-                      >
+                {/* Task List */}
+                <div className="space-y-2">
+                  {plannerData.tasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg bg-background/30 border transition-all duration-200",
+                        task.completed 
+                          ? "border-green-500/30 bg-green-500/5" 
+                          : "border-white/10 hover:border-white/20 hover:bg-background/40"
+                      )}
+                    >
+                      <div className="relative">
                         <Checkbox
                           checked={task.completed}
-                          onCheckedChange={() => toggleTask(task.id)}
-                          className="data-[state=checked]:bg-[oklch(0.68_0.18_45)] data-[state=checked]:border-[oklch(0.68_0.18_45)]"
-                        />
-                        <span
+                          onCheckedChange={() => {
+                            toggleTask(task.id)
+                          }}
                           className={cn(
-                            "flex-1",
-                            task.completed && "line-through text-muted-foreground"
+                            "data-[state=checked]:bg-[oklch(0.68_0.18_45)] data-[state=checked]:border-[oklch(0.68_0.18_45)] transition-all",
+                            completedTaskIds.has(task.id) && "animate-pulse scale-110"
                           )}
-                        >
-                          {task.text}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteTask(task.id)}
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-red-400"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        />
+                        {completedTaskIds.has(task.id) && (
+                          <div className="absolute inset-0 rounded-md bg-[oklch(0.68_0.18_45)]/30 animate-ping pointer-events-none" />
+                        )}
                       </div>
-                    ))}
-                  </div>
+                      <span
+                        className={cn(
+                          "flex-1 transition-all",
+                          task.completed && "line-through text-muted-foreground"
+                        )}
+                      >
+                        {task.text}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteTask(task.id)}
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-red-400"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
 
                   {/* Add Task */}
                   <div className="flex gap-2">
@@ -464,21 +913,38 @@ export default function PlannerPage() {
               </div>
             </Card>
 
-            {/* Triggers */}
-            <Card className="p-6 venser-card-glow bg-gradient-to-br from-[oklch(0.7_0.18_30)]/10 to-[oklch(0.68_0.18_45)]/10 border-[oklch(0.7_0.18_30)]/20">
-              <div className="flex items-start gap-4">
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[oklch(0.7_0.18_30)] to-[oklch(0.68_0.18_45)] flex items-center justify-center shrink-0">
-                  <Zap className="h-6 w-6 text-white" />
+          {/* 4. Gatilhos - Detectar Riscos */}
+          <Card className="p-6 md:p-7 venser-card-glow bg-gradient-to-br from-[oklch(0.7_0.18_30)]/15 to-[oklch(0.68_0.18_45)]/15 border-[oklch(0.7_0.18_30)]/25 hover:border-[oklch(0.7_0.18_30)]/40 transition-all duration-300">
+            <div className="flex items-start gap-4">
+              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-[oklch(0.7_0.18_30)] to-[oklch(0.68_0.18_45)] flex items-center justify-center shrink-0 shadow-lg">
+                <AlertTriangle className="h-7 w-7 text-white" />
+              </div>
+              <div className="flex-1 space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    {t.triggers}
+                    {plannerData.triggers.length > 0 && (
+                      <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">
+                        {plannerData.triggers.filter(t => t.intensity === "forte").length} {language === "pt" ? "fortes" : "strong"}
+                      </span>
+                    )}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {language === "pt" 
+                      ? "Identifique situações que podem desencadear comportamentos indesejados"
+                      : "Identify situations that may trigger unwanted behaviors"}
+                  </p>
                 </div>
-                <div className="flex-1 space-y-4">
-                  <h2 className="text-xl font-semibold">{t.triggers}</h2>
                   
                   {/* Trigger List */}
                   <div className="space-y-3">
                     {plannerData.triggers.map((trigger) => (
                       <div
                         key={trigger.id}
-                        className="p-3 rounded-lg bg-background/30 border border-white/10 hover:border-white/20 transition-colors"
+                        className={cn(
+                          "p-3 rounded-lg border transition-all duration-300",
+                          `bg-gradient-to-br ${getIntensityCardColor(trigger.intensity)}`
+                        )}
                       >
                         <div className="flex items-start gap-3">
                           <div className="flex-1">
@@ -566,78 +1032,250 @@ export default function PlannerPage() {
               </div>
             </Card>
 
-            {/* Reward */}
-            <Card className="p-6 venser-card-glow bg-gradient-to-br from-[oklch(0.68_0.18_45)]/10 to-[oklch(0.54_0.18_285)]/10 border-[oklch(0.68_0.18_45)]/20">
-              <div className="flex items-start gap-4">
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[oklch(0.68_0.18_45)] to-[oklch(0.54_0.18_285)] flex items-center justify-center shrink-0">
-                  <Trophy className="h-6 w-6 text-white" />
-                </div>
-                <div className="flex-1 space-y-2">
-                  <h2 className="text-xl font-semibold">{t.reward}</h2>
-                  <Input
-                    value={plannerData.reward || ""}
-                    onChange={(e) =>
-                      setPlannerData({ ...plannerData, reward: e.target.value })
-                    }
-                    placeholder={t.rewardPlaceholder}
-                    className="bg-background/50 border-white/10 focus:border-[oklch(0.68_0.18_45)]/50"
-                  />
-                </div>
+          {/* 5. Recompensa - Recompensar */}
+          <Card className="p-6 md:p-7 venser-card-glow bg-gradient-to-br from-[oklch(0.68_0.18_45)]/15 to-[oklch(0.54_0.18_285)]/15 border-[oklch(0.68_0.18_45)]/25 hover:border-[oklch(0.68_0.18_45)]/40 transition-all duration-300">
+            <div className="flex items-start gap-4">
+              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-[oklch(0.68_0.18_45)] to-[oklch(0.54_0.18_285)] flex items-center justify-center shrink-0 shadow-lg">
+                <Trophy className="h-7 w-7 text-white" />
               </div>
-            </Card>
-
-            {/* Reflection */}
-            <Card className="p-6 venser-card-glow bg-gradient-to-br from-[oklch(0.54_0.18_285)]/10 to-[oklch(0.7_0.15_220)]/10 border-[oklch(0.54_0.18_285)]/20">
-              <div className="flex items-start gap-4">
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shrink-0">
-                  <Heart className="h-6 w-6 text-white" />
+              <div className="flex-1 space-y-3">
+                <div>
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    {t.reward}
+                    {plannerData.reward && (
+                      <Sparkles className="h-5 w-5 text-yellow-400 animate-pulse" />
+                    )}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {language === "pt" 
+                      ? "Celebre suas conquistas - recompensas reforçam comportamentos positivos"
+                      : "Celebrate your achievements - rewards reinforce positive behaviors"}
+                  </p>
                 </div>
-                <div className="flex-1 space-y-2">
-                  <h2 className="text-xl font-semibold">{t.reflection}</h2>
+                <Input
+                  value={plannerData.reward || ""}
+                  onChange={(e) =>
+                    setPlannerData({ ...plannerData, reward: e.target.value })
+                  }
+                  placeholder={t.rewardPlaceholder}
+                  className="bg-background/50 border-white/10 focus:border-[oklch(0.68_0.18_45)]/50 transition-all"
+                />
+                {plannerData.reward && plannerData.tasks.length > 0 && (
+                  <div className="mt-4 p-4 rounded-lg bg-gradient-to-r from-[oklch(0.68_0.18_45)]/20 to-[oklch(0.54_0.18_285)]/20 border border-[oklch(0.68_0.18_45)]/30">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-[oklch(0.68_0.18_45)] mb-1">
+                          {language === "pt" ? "Sua recompensa:" : language === "es" ? "Tu recompensa:" : "Your reward:"}
+                        </p>
+                        <p className="text-lg font-bold text-foreground">
+                          {plannerData.reward}
+                        </p>
+                      </div>
+                      <Trophy className="h-8 w-8 text-yellow-400" />
+                    </div>
+                    {plannerData.tasks.filter(t => !t.completed).length > 0 && (
+                      <p className="text-sm text-muted-foreground mt-3 pt-3 border-t border-white/10">
+                        {language === "pt" 
+                          ? `Faltam ${plannerData.tasks.filter(t => !t.completed).length} ${plannerData.tasks.filter(t => !t.completed).length === 1 ? 'tarefa' : 'tarefas'} para conquistar sua recompensa.`
+                          : language === "es"
+                          ? `Faltan ${plannerData.tasks.filter(t => !t.completed).length} ${plannerData.tasks.filter(t => !t.completed).length === 1 ? 'tarea' : 'tareas'} para conquistar tu recompensa.`
+                          : `${plannerData.tasks.filter(t => !t.completed).length} ${plannerData.tasks.filter(t => !t.completed).length === 1 ? 'task' : 'tasks'} left to earn your reward.`}
+                      </p>
+                    )}
+                    {plannerData.tasks.length > 0 && plannerData.tasks.every(t => t.completed) && (
+                      <p className="text-sm font-semibold text-green-400 mt-3 pt-3 border-t border-white/10 animate-pulse">
+                        {language === "pt" 
+                          ? "🎉 Parabéns! Você conquistou sua recompensa!"
+                          : language === "es"
+                          ? "🎉 ¡Felicidades! ¡Conquistaste tu recompensa!"
+                          : "🎉 Congratulations! You've earned your reward!"}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          {/* 6. Reflexão - Refletir */}
+          <Card className={cn(
+            "p-6 md:p-7 venser-card-glow bg-gradient-to-br from-[oklch(0.54_0.18_285)]/15 to-[oklch(0.7_0.15_220)]/15 border-[oklch(0.54_0.18_285)]/25 hover:border-[oklch(0.54_0.18_285)]/40 transition-all duration-500 relative overflow-hidden",
+            reflectionActive && "bg-gradient-to-br from-[oklch(0.18_0.03_270)]/40 to-[oklch(0.18_0.03_270)]/30"
+          )}>
+            {reflectionActive && (
+              <div className="absolute inset-0 bg-gradient-to-br from-black/20 to-black/10 pointer-events-none transition-opacity duration-500" />
+            )}
+            <div className="flex items-start gap-4 relative z-10">
+              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shrink-0 shadow-lg">
+                <Heart className="h-7 w-7 text-white" />
+              </div>
+              <div className="flex-1 space-y-3">
+                <div>
+                  <h2 className="text-xl font-bold">{t.reflection}</h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {language === "pt" 
+                      ? "Revisite seu dia - reflexão consolida aprendizados e crescimento"
+                      : "Review your day - reflection consolidates learning and growth"}
+                  </p>
+                </div>
+                <div className="relative">
                   <Textarea
                     value={plannerData.reflection || ""}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setPlannerData({ ...plannerData, reflection: e.target.value })
-                    }
+                    }}
+                    onBlur={(e) => {
+                      if (e.target.value.trim().length > 0 && !reflectionActive) {
+                        setReflectionActive(true)
+                        setTimeout(() => {
+                          toast.success(
+                            language === "pt" 
+                              ? "Respire. O aprendizado de hoje vale mais que o erro de ontem. 🕊️"
+                              : language === "es"
+                              ? "Respira. El aprendizaje de hoy vale más que el error de ayer. 🕊️"
+                              : "Breathe. Today's learning is worth more than yesterday's mistake. 🕊️",
+                            {
+                              duration: 6000,
+                              style: {
+                                background: "linear-gradient(to right, oklch(0.54 0.18 285), oklch(0.7 0.15 220))",
+                                color: "white",
+                                border: "1px solid rgba(255, 255, 255, 0.2)",
+                              },
+                            }
+                          )
+                        }, 500)
+                      } else if (e.target.value.trim().length === 0) {
+                        setReflectionActive(false)
+                      }
+                    }}
                     placeholder={t.reflectionPlaceholder}
-                    className="min-h-[120px] bg-background/50 border-white/10 focus:border-[oklch(0.54_0.18_285)]/50"
+                    className={cn(
+                      "min-h-[140px] bg-background/50 border-white/10 focus:border-[oklch(0.54_0.18_285)]/50 transition-all",
+                      reflectionActive && "bg-background/60"
+                    )}
                   />
                 </div>
-              </div>
-            </Card>
-
-            {/* Mood */}
-            <Card className="p-6 venser-card-glow bg-gradient-to-br from-[oklch(0.7_0.15_220)]/10 to-[oklch(0.68_0.18_45)]/10 border-[oklch(0.7_0.15_220)]/20">
-              <div className="flex items-start gap-4">
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[oklch(0.7_0.15_220)] to-[oklch(0.68_0.18_45)] flex items-center justify-center shrink-0">
-                  <Smile className="h-6 w-6 text-white" />
-                </div>
-                <div className="flex-1 space-y-3">
-                  <h2 className="text-xl font-semibold">{t.mood}</h2>
-                  <p className="text-sm text-muted-foreground">{t.selectMood}</p>
-                  <div className="flex flex-wrap gap-3">
-                    {getMoodOptions(language).map((moodOption) => (
-                      <Button
-                        key={moodOption.emoji}
-                        variant="outline"
-                        onClick={() =>
-                          setPlannerData({ ...plannerData, mood: moodOption.emoji })
-                        }
-                        className={cn(
-                          "h-16 w-16 text-3xl p-0 border-2 transition-all",
-                          plannerData.mood === moodOption.emoji
-                            ? "border-[oklch(0.7_0.15_220)] bg-[oklch(0.7_0.15_220)]/20 scale-110"
-                            : "border-white/10 hover:border-white/30 bg-background/50"
-                        )}
-                      >
-                        {moodOption.emoji}
-                      </Button>
-                    ))}
+                {reflectionActive && plannerData.reflection && (
+                  <div className="mt-3 p-4 rounded-lg bg-gradient-to-r from-[oklch(0.54_0.18_285)]/20 to-[oklch(0.7_0.15_220)]/20 border border-[oklch(0.54_0.18_285)]/30 animate-in fade-in">
+                    <p className="text-sm text-foreground/90 italic leading-relaxed">
+                      {language === "pt" 
+                        ? "Respire. O aprendizado de hoje vale mais que o erro de ontem."
+                        : language === "es"
+                        ? "Respira. El aprendizaje de hoy vale más que el error de ayer."
+                        : "Breathe. Today's learning is worth more than yesterday's mistake."}
+                    </p>
                   </div>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          {/* 7. Humor - Consolidar Emoção */}
+          <Card className="p-6 md:p-7 venser-card-glow bg-gradient-to-br from-[oklch(0.7_0.15_220)]/15 to-[oklch(0.68_0.18_45)]/15 border-[oklch(0.7_0.15_220)]/25 hover:border-[oklch(0.7_0.15_220)]/40 transition-all duration-300">
+            <div className="flex items-start gap-4">
+              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-[oklch(0.7_0.15_220)] to-[oklch(0.68_0.18_45)] flex items-center justify-center shrink-0 shadow-lg">
+                <Smile className="h-7 w-7 text-white" />
+              </div>
+              <div className="flex-1 space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold">{t.mood}</h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {language === "pt" 
+                      ? "Registre como você se sente - emoções são parte importante da jornada"
+                      : "Record how you feel - emotions are an important part of the journey"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {getMoodOptions(language).map((moodOption) => (
+                    <Button
+                      key={moodOption.emoji}
+                      variant="outline"
+                      onClick={() => {
+                        setPlannerData({ ...plannerData, mood: moodOption.emoji })
+                        const message = moodOption.message
+                        setSelectedMoodMessage(message)
+                        toast.success(
+                          `${moodOption.emoji} ${message}`,
+                          {
+                            duration: 5000,
+                            style: {
+                              background: "linear-gradient(to right, oklch(0.7 0.15 220), oklch(0.68 0.18 45))",
+                              color: "white",
+                              border: "1px solid rgba(255, 255, 255, 0.2)",
+                            },
+                          }
+                        )
+                      }}
+                      className={cn(
+                        "h-20 w-20 text-4xl p-0 border-2 transition-all hover:scale-105",
+                        plannerData.mood === moodOption.emoji
+                          ? "border-[oklch(0.7_0.15_220)] bg-[oklch(0.7_0.15_220)]/20 scale-110 shadow-lg"
+                          : "border-white/10 hover:border-white/30 bg-background/50"
+                      )}
+                    >
+                      {moodOption.emoji}
+                    </Button>
+                  ))}
+                </div>
+                {plannerData.mood && selectedMoodMessage && (
+                  <div className="mt-3 p-4 rounded-lg bg-gradient-to-r from-[oklch(0.7_0.15_220)]/20 to-[oklch(0.68_0.18_45)]/20 border border-[oklch(0.7_0.15_220)]/30 animate-in fade-in">
+                    <p className="text-base font-medium text-foreground/90 leading-relaxed">
+                      {plannerData.mood} {selectedMoodMessage}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          {/* 8. Interação Final com Tony - Agente Motivacional */}
+          <Card className="p-6 md:p-8 venser-card-glow bg-gradient-to-br from-[oklch(0.54_0.18_285)]/20 via-[oklch(0.7_0.15_220)]/20 to-[oklch(0.68_0.18_45)]/20 border-[oklch(0.54_0.18_285)]/30 backdrop-blur-sm">
+            <div className="flex flex-col md:flex-row items-start gap-6">
+              <div className="flex-shrink-0">
+                <div className="h-20 w-20 rounded-full bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shadow-xl">
+                  <MessageCircle className="h-10 w-10 text-white" />
                 </div>
               </div>
-            </Card>
-          </div>
+              <div className="flex-1 space-y-4">
+                <div>
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    {t.tony}
+                    <span className="text-sm font-normal text-muted-foreground">
+                      {language === "pt" ? "seu agente motivacional" : "your motivational agent"}
+                    </span>
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {language === "pt" 
+                      ? "Consolidação final - uma mensagem personalizada baseada no seu progresso"
+                      : "Final consolidation - a personalized message based on your progress"}
+                  </p>
+                </div>
+                <div className="p-4 rounded-lg bg-background/40 border border-[oklch(0.54_0.18_285)]/30">
+                  <p className="text-base leading-relaxed text-foreground/90">
+                    {tonyMessage}
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <Link href="/tony">
+                    <Button className="bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] hover:opacity-90 transition-opacity">
+                      <MessageCircle className="h-4 w-4 mr-2" />
+                      {language === "pt" ? "Conversar com Tony" : "Chat with Tony"}
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setTonyMessage(generateTonyMessage())
+                      toast.success(language === "pt" ? "Mensagem atualizada! 💚" : "Message updated! 💚")
+                    }}
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    {language === "pt" ? "Nova mensagem" : "New message"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
         </main>
       </div>
 
