@@ -12,7 +12,7 @@ interface DayCardProps {
 }
 
 export function DayCard({ day, status, onClick, streak }: DayCardProps) {
-  const isClickable = status === "current"
+  const isClickable = status === "current" || status === "completed"
 
   return (
     <Card

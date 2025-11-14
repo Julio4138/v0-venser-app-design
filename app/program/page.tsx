@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Flame, Check, Lock, Trophy, Star } from "lucide-react"
+import { Flame, Check, Lock, Trophy, Star, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/lib/sidebar-context"
 import { supabase } from "@/lib/supabase/client"
@@ -92,6 +92,10 @@ export default function ProgramPage() {
   // Auto-save reflection with debounce
   useEffect(() => {
     if (!selectedDay || !reflectionText) return
+    
+    // Don't auto-save if day is completed
+    const day = programDays.find((d) => d.day_number === selectedDay)
+    if (day?.completed) return
 
     const timeoutId = setTimeout(async () => {
       try {
@@ -115,7 +119,7 @@ export default function ProgramPage() {
     }, 1000) // Debounce 1 second
 
     return () => clearTimeout(timeoutId)
-  }, [reflectionText, selectedDay])
+  }, [reflectionText, selectedDay, programDays])
 
   const loadUserData = async () => {
     try {
@@ -217,7 +221,8 @@ export default function ProgramPage() {
         return
       }
 
-      // If day is locked and not day 1, don't load
+      // Allow viewing completed days without restrictions
+      // If day is locked and not completed and not day 1, don't load
       if (dayNumber !== 1 && !programDay.unlocked_at && !programDay.completed) {
         toast.error(
           language === "pt"
@@ -349,6 +354,17 @@ export default function ProgramPage() {
       } = await supabase.auth.getUser()
 
       if (!user || !selectedDay) return
+      
+      // Don't allow task changes if day is completed
+      const day = programDays.find((d) => d.day_number === selectedDay)
+      if (day?.completed) {
+        toast.info(
+          language === "pt"
+            ? "Este dia já foi completado. Não é possível alterar as tarefas."
+            : "This day has already been completed. Tasks cannot be changed."
+        )
+        return
+      }
 
       // Find task to get XP reward
       const task = dayTasks.find((t) => t.id === taskId)
@@ -648,6 +664,54 @@ export default function ProgramPage() {
     }
   }
 
+  const navigateToDay = (direction: "prev" | "next") => {
+    if (!selectedDay) return
+
+    const completedDays = programDays
+      .filter((d) => d.completed)
+      .map((d) => d.day_number)
+      .sort((a, b) => a - b)
+
+    if (direction === "prev") {
+      // Find previous completed day
+      const prevDay = completedDays.filter((d) => d < selectedDay).pop()
+      if (prevDay) {
+        setSelectedDay(prevDay)
+      }
+    } else {
+      // Find next completed day
+      const nextDay = completedDays.find((d) => d > selectedDay)
+      if (nextDay) {
+        setSelectedDay(nextDay)
+      }
+    }
+  }
+
+  const getCompletedDays = () => {
+    return programDays
+      .filter((d) => d.completed)
+      .map((d) => d.day_number)
+      .sort((a, b) => a - b)
+  }
+
+  const canNavigatePrev = () => {
+    if (!selectedDay) return false
+    const completedDays = getCompletedDays()
+    return completedDays.some((d) => d < selectedDay)
+  }
+
+  const canNavigateNext = () => {
+    if (!selectedDay) return false
+    const completedDays = getCompletedDays()
+    return completedDays.some((d) => d > selectedDay)
+  }
+
+  const isDayCompleted = () => {
+    if (!selectedDay) return false
+    const day = programDays.find((d) => d.day_number === selectedDay)
+    return day?.completed || false
+  }
+
   const currentDayData = programDays.find((d) => d.day_number === userProgress.currentDay)
   
   // Verificar se todas as tarefas obrigatórias estão completas
@@ -749,21 +813,64 @@ export default function ProgramPage() {
           {/* Header com gradiente */}
           <div className="px-6 pt-6 pb-4 bg-gradient-to-r from-[oklch(0.54_0.18_285)]/20 to-[oklch(0.7_0.15_220)]/20 border-b border-white/10">
             <DialogHeader className="text-left">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shrink-0">
-                  <span className="text-white font-bold text-lg">{selectedDay}</span>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3 flex-1">
+                  {/* Botão navegação anterior */}
+                  {isDayCompleted() && canNavigatePrev() && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => navigateToDay("prev")}
+                      className="h-8 w-8 shrink-0"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </Button>
+                  )}
+                  
+                  <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center shrink-0 relative">
+                    <span className="text-white font-bold text-lg">{selectedDay}</span>
+                    {isDayCompleted() && (
+                      <div className="absolute -top-1 -right-1">
+                        <Check className="h-4 w-4 text-[oklch(0.68_0.18_45)] bg-background rounded-full p-0.5" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <DialogTitle className="text-xl md:text-2xl font-bold text-foreground leading-tight">
+                      {dayTemplate 
+                        ? (language === "pt" ? dayTemplate.title_pt : language === "es" ? dayTemplate.title_es : dayTemplate.title_en)
+                        : `${language === "pt" ? "Dia" : "Day"} ${selectedDay}`
+                      }
+                    </DialogTitle>
+                    {isDayCompleted() && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {language === "pt" ? "Dia completado" : "Day completed"}
+                      </p>
+                    )}
+                  </div>
+                  
+                  {/* Botão navegação próximo */}
+                  {isDayCompleted() && canNavigateNext() && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => navigateToDay("next")}
+                      className="h-8 w-8 shrink-0"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </Button>
+                  )}
                 </div>
-                <DialogTitle className="text-xl md:text-2xl font-bold text-foreground leading-tight">
-                  {dayTemplate 
-                    ? (language === "pt" ? dayTemplate.title_pt : language === "es" ? dayTemplate.title_es : dayTemplate.title_en)
-                    : `${language === "pt" ? "Dia" : "Day"} ${selectedDay}`
-                  }
-                </DialogTitle>
               </div>
               <DialogDescription className="text-sm text-muted-foreground">
-                {language === "pt"
-                  ? "Complete todas as tarefas e faça sua reflexão para desbloquear o próximo dia"
-                  : "Complete all tasks and make your reflection to unlock the next day"}
+                {isDayCompleted() 
+                  ? (language === "pt"
+                      ? "Revise as informações e reflexões deste dia completado"
+                      : "Review the information and reflections from this completed day")
+                  : (language === "pt"
+                      ? "Complete todas as tarefas e faça sua reflexão para desbloquear o próximo dia"
+                      : "Complete all tasks and make your reflection to unlock the next day")
+                }
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -788,6 +895,7 @@ export default function ProgramPage() {
                     tasks={dayTasks}
                     onTaskComplete={handleTaskComplete}
                     language={language}
+                    disabled={isDayCompleted()}
                   />
                 )}
 
@@ -796,46 +904,58 @@ export default function ProgramPage() {
                   reflectionText={reflectionText}
                   onReflectionChange={setReflectionText}
                   language={language}
+                  disabled={isDayCompleted()}
                 />
               </div>
 
               {/* Footer fixo com botão */}
-              <div className="px-4 md:px-6 py-3 md:py-4 border-t border-white/10 bg-background/95 backdrop-blur-sm sticky bottom-0 z-10">
-                <div className="space-y-2">
-                  {!canComplete && dayTasks.length > 0 && (
-                    <p className="text-xs md:text-sm text-muted-foreground text-center">
-                      {language === "pt"
-                        ? "Complete todas as tarefas obrigatórias para finalizar o dia"
-                        : "Complete all required tasks to finish the day"}
-                    </p>
-                  )}
-                  {canComplete && !isCompleting && (
-                    <p className="text-xs md:text-sm text-green-400/80 text-center">
-                      {language === "pt"
-                        ? "✓ Pronto para completar o dia!"
-                        : "✓ Ready to complete the day!"}
-                    </p>
-                  )}
-                  <Button
-                    size="lg"
-                    onClick={handleCompleteDay}
-                    disabled={!canComplete || isCompleting}
-                    className="w-full h-12 md:h-14 bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity font-semibold"
-                  >
-                    {isCompleting ? (
-                      <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                        {language === "pt" ? "Completando..." : "Completing..."}
-                      </>
-                    ) : (
-                      <>
-                        <Check className="mr-2 h-5 w-5" />
-                        {language === "pt" ? "Completar Dia e Desbloquear Próximo" : "Complete Day and Unlock Next"}
-                      </>
+              {!isDayCompleted() && (
+                <div className="px-4 md:px-6 py-3 md:py-4 border-t border-white/10 bg-background/95 backdrop-blur-sm sticky bottom-0 z-10">
+                  <div className="space-y-2">
+                    {!canComplete && dayTasks.length > 0 && (
+                      <p className="text-xs md:text-sm text-muted-foreground text-center">
+                        {language === "pt"
+                          ? "Complete todas as tarefas obrigatórias para finalizar o dia"
+                          : "Complete all required tasks to finish the day"}
+                      </p>
                     )}
-                  </Button>
+                    {canComplete && !isCompleting && (
+                      <p className="text-xs md:text-sm text-green-400/80 text-center">
+                        {language === "pt"
+                          ? "✓ Pronto para completar o dia!"
+                          : "✓ Ready to complete the day!"}
+                      </p>
+                    )}
+                    <Button
+                      size="lg"
+                      onClick={handleCompleteDay}
+                      disabled={!canComplete || isCompleting}
+                      className="w-full h-12 md:h-14 bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity font-semibold"
+                    >
+                      {isCompleting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                          {language === "pt" ? "Completando..." : "Completing..."}
+                        </>
+                      ) : (
+                        <>
+                          <Check className="mr-2 h-5 w-5" />
+                          {language === "pt" ? "Completar Dia e Desbloquear Próximo" : "Complete Day and Unlock Next"}
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
+              {isDayCompleted() && (
+                <div className="px-4 md:px-6 py-3 md:py-4 border-t border-white/10 bg-background/95 backdrop-blur-sm sticky bottom-0 z-10">
+                  <p className="text-xs md:text-sm text-muted-foreground text-center">
+                    {language === "pt"
+                      ? "Este dia já foi completado. Use os botões de navegação para revisar outros dias."
+                      : "This day has already been completed. Use the navigation buttons to review other days."}
+                  </p>
+                </div>
+              )}
             </>
           )}
         </DialogContent>

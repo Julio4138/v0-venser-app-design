@@ -11,6 +11,7 @@ interface ProgramDayReflectionProps {
   onReflectionChange: (text: string) => void
   language?: "pt" | "en" | "es"
   placeholder?: string
+  disabled?: boolean
 }
 
 export function ProgramDayReflection({
@@ -18,6 +19,7 @@ export function ProgramDayReflection({
   onReflectionChange,
   language = "pt",
   placeholder,
+  disabled = false,
 }: ProgramDayReflectionProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
@@ -77,6 +79,8 @@ export function ProgramDayReflection({
           placeholder={placeholder || defaultPlaceholder}
           className="min-h-[120px] resize-none"
           maxLength={500}
+          disabled={disabled}
+          readOnly={disabled}
         />
 
         <div className="flex items-center justify-between text-xs">

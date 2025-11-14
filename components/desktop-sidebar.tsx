@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, TrendingUp, Wrench, Users, Target, User, Sparkles, PanelLeftOpen, PanelLeftClose, Shield, Bot, Calendar } from "lucide-react"
+import { LayoutDashboard, TrendingUp, Wrench, Users, Target, User, Sparkles, PanelLeftOpen, PanelLeftClose, Shield, Bot, ListChecks } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/lib/language-context"
 import { translations } from "@/lib/translations"
@@ -46,11 +46,10 @@ export function DesktopSidebar() {
   const navigation = [
     { name: t.dashboard, href: "/dashboard", icon: LayoutDashboard },
     { name: t.program, href: "/program", icon: Target },
+    { name: t.tasksNav, href: "/tasks", icon: ListChecks },
     { name: t.analytics, href: "/analytics", icon: TrendingUp },
     { name: t.tools, href: "/tools", icon: Wrench },
     { name: t.community, href: "/community", icon: Users },
-    { name: t.missions, href: "/missions", icon: Sparkles },
-    { name: t.planner, href: "/planner", icon: Calendar },
     { name: t.tony, href: "/tony", icon: Bot },
     { name: t.profile, href: "/profile", icon: User },
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),

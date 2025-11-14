@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, TrendingUp, Wrench, Users, Target, User, Sparkles, X, Bot, Calendar } from "lucide-react"
+import { LayoutDashboard, TrendingUp, Wrench, Users, Target, User, Sparkles, X, Bot, ListChecks } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/lib/language-context"
 import { translations } from "@/lib/translations"
@@ -22,11 +22,10 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const navigation = [
     { name: t.dashboard, href: "/dashboard", icon: LayoutDashboard },
     { name: t.program, href: "/program", icon: Target },
+    { name: t.tasksNav, href: "/tasks", icon: ListChecks },
     { name: t.analytics, href: "/analytics", icon: TrendingUp },
     { name: t.tools, href: "/tools", icon: Wrench },
     { name: t.community, href: "/community", icon: Users },
-    { name: t.missions, href: "/missions", icon: Sparkles },
-    { name: t.planner, href: "/planner", icon: Calendar },
     { name: t.tony, href: "/tony", icon: Bot },
     { name: t.profile, href: "/profile", icon: User },
   ]
@@ -69,27 +68,26 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
 
           {/* Navigation */}
           <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
-            {navigation.map((item) => {
-              const isActive = pathname === item.href
-              const Icon = item.icon
+            {navigation
+              .filter((item) => pathname !== item.href)
+              .map((item) => {
+                const Icon = item.icon
 
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={onClose}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
-                    isActive
-                      ? "bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] text-white shadow-md"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  )}
-                >
-                  <Icon className="h-5 w-5 shrink-0" />
-                  <span>{item.name}</span>
-                </Link>
-              )
-            })}
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onClose}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
+                      "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    )}
+                  >
+                    <Icon className="h-5 w-5 shrink-0" />
+                    <span>{item.name}</span>
+                  </Link>
+                )
+              })}
           </nav>
 
           {/* Settings */}

@@ -21,6 +21,7 @@ interface ProgramDayChecklistProps {
   tasks: Task[]
   onTaskComplete: (taskId: string, completed: boolean) => void
   language?: "pt" | "en" | "es"
+  disabled?: boolean
 }
 
 const taskIcons = {
@@ -41,6 +42,7 @@ export function ProgramDayChecklist({
   tasks,
   onTaskComplete,
   language = "pt",
+  disabled = false,
 }: ProgramDayChecklistProps) {
   const completedCount = tasks.filter((t) => t.completed).length
   const totalCount = tasks.length
@@ -125,6 +127,7 @@ export function ProgramDayChecklist({
                           onTaskComplete(task.id, checked === true)
                         }
                         className="shrink-0"
+                        disabled={disabled}
                       />
                     </div>
                   </div>
@@ -137,6 +140,7 @@ export function ProgramDayChecklist({
     </div>
   )
 }
+
 
 
 
