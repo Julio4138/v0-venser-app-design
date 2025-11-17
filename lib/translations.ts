@@ -263,6 +263,10 @@ export const translations = {
     delete: "Excluir",
     completed: "Concluído",
     notCompleted: "Pendente",
+    reviewCompletedDays: "Revisar Dias Completados",
+    reviewCompletedDaysDesc: "Clique em qualquer dia para revisar seus conteúdos e reflexões",
+    noCompletedDays: "Você ainda não completou nenhum dia. Complete seu primeiro dia para começar!",
+    viewDay: "Ver Dia",
   },
   en: {
     welcome: "Welcome to",
@@ -528,6 +532,10 @@ export const translations = {
     delete: "Delete",
     completed: "Completed",
     notCompleted: "Pending",
+    reviewCompletedDays: "Review Completed Days",
+    reviewCompletedDaysDesc: "Click on any day to review its content and reflections",
+    noCompletedDays: "You haven't completed any days yet. Complete your first day to get started!",
+    viewDay: "View Day",
   },
   es: {
     welcome: "Bienvenido a",
@@ -793,6 +801,10 @@ export const translations = {
     delete: "Eliminar",
     completed: "Completado",
     notCompleted: "Pendiente",
+    reviewCompletedDays: "Revisar Días Completados",
+    reviewCompletedDaysDesc: "Haz clic en cualquier día para revisar su contenido y reflexiones",
+    noCompletedDays: "Aún no has completado ningún día. ¡Completa tu primer día para comenzar!",
+    viewDay: "Ver Día",
   },
 } as const
 

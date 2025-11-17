@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Edit, Trash2, Save, X, BookOpen, Play, Volume2, Video, Check } from "lucide-react"
+import { Plus, Edit, Trash2, Save, X, BookOpen, Play, Volume2, Video, Check, ArrowLeft } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { useLanguage } from "@/lib/language-context"
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils"
 interface ProgramDayTemplate {
   id: string
   day_number: number
+  program_duration?: number
   title_pt: string
   title_en?: string
   title_es?: string
@@ -48,6 +50,8 @@ interface Task {
 
 export default function AdminProgramPage() {
   const { language } = useLanguage()
+  const programDurations = [7, 15, 30, 60, 90, 180, 365]
+  const [selectedDuration, setSelectedDuration] = useState<number>(90)
   const [templates, setTemplates] = useState<ProgramDayTemplate[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<ProgramDayTemplate | null>(null)
   const [selectedDayTasks, setSelectedDayTasks] = useState<Task[]>([])
@@ -59,6 +63,7 @@ export default function AdminProgramPage() {
   // Form state
   const [formData, setFormData] = useState<Partial<ProgramDayTemplate>>({
     day_number: 1,
+    program_duration: 90,
     title_pt: "",
     title_en: "",
     title_es: "",
@@ -78,6 +83,20 @@ export default function AdminProgramPage() {
     checkAdminAccess()
     loadTemplates()
   }, [])
+
+  useEffect(() => {
+    loadTemplates()
+  }, [selectedDuration])
+
+  // Update formData program_duration when duration changes and dialog is open
+  useEffect(() => {
+    if (isDialogOpen && !isEditing) {
+      setFormData((prev) => ({
+        ...prev,
+        program_duration: selectedDuration,
+      }))
+    }
+  }, [selectedDuration, isDialogOpen, isEditing])
 
   useEffect(() => {
     if (selectedTemplate) {
@@ -117,6 +136,7 @@ export default function AdminProgramPage() {
       const { data, error } = await supabase
         .from("program_day_templates")
         .select("*")
+        .eq("program_duration", selectedDuration)
         .order("day_number", { ascending: true })
 
       if (error) throw error
@@ -150,6 +170,7 @@ export default function AdminProgramPage() {
   const handleCreateNew = () => {
     setFormData({
       day_number: templates.length + 1,
+      program_duration: selectedDuration,
       title_pt: "",
       title_en: "",
       title_es: "",
@@ -170,7 +191,10 @@ export default function AdminProgramPage() {
   }
 
   const handleEdit = (template: ProgramDayTemplate) => {
-    setFormData(template)
+    setFormData({
+      ...template,
+      program_duration: template.program_duration || selectedDuration,
+    })
     setSelectedTemplate(template)
     setIsEditing(true)
     setIsDialogOpen(true)
@@ -178,9 +202,15 @@ export default function AdminProgramPage() {
 
   const handleSave = async () => {
     try {
-      if (!formData.day_number || !formData.title_pt) {
+      if (!formData.day_number || !formData.title_pt || !formData.program_duration) {
         toast.error("Preencha todos os campos obrigatórios")
         return
+      }
+      
+      // Ensure program_duration matches selected duration
+      const finalFormData = {
+        ...formData,
+        program_duration: selectedDuration,
       }
 
       let templateId: string
@@ -190,7 +220,7 @@ export default function AdminProgramPage() {
         const { data, error } = await supabase
           .from("program_day_templates")
           .update({
-            ...formData,
+            ...finalFormData,
             updated_at: new Date().toISOString(),
           })
           .eq("id", selectedTemplate.id)
@@ -205,7 +235,7 @@ export default function AdminProgramPage() {
         const { data, error } = await supabase
           .from("program_day_templates")
           .insert({
-            ...formData,
+            ...finalFormData,
           })
           .select()
           .single()
@@ -308,17 +338,53 @@ export default function AdminProgramPage() {
     <div className="min-h-screen bg-background p-6 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Gerenciar Programa de 90 Dias</h1>
-            <p className="text-muted-foreground mt-1">
-              Crie e edite os templates dos dias do programa
-            </p>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link href="/admin">
+                <Button variant="outline" size="icon" className="shrink-0">
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </Link>
+              <div>
+                <h1 className="text-3xl font-bold">Gerenciar Programa</h1>
+                <p className="text-muted-foreground mt-1">
+                  Crie e edite os templates dos dias do programa
+                </p>
+              </div>
+            </div>
+            <Button onClick={handleCreateNew} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Novo Dia
+            </Button>
           </div>
-          <Button onClick={handleCreateNew} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Novo Dia
-          </Button>
+          
+          {/* Duration Selector */}
+          <Card className="p-4">
+            <div className="flex flex-col gap-3">
+              <label className="text-sm font-medium">
+                Duração do Programa
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {programDurations.map((duration) => (
+                  <Button
+                    key={duration}
+                    variant={selectedDuration === duration ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSelectedDuration(duration)}
+                    className={cn(
+                      "transition-all",
+                      selectedDuration === duration
+                        ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white border-0 shadow-lg"
+                        : "hover:bg-accent"
+                    )}
+                  >
+                    {duration} dias
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </Card>
         </div>
 
         {/* Templates Grid */}
@@ -335,6 +401,9 @@ export default function AdminProgramPage() {
                       )}
                     </div>
                     <h3 className="font-semibold mt-1">{template.title_pt}</h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Programa de {template.program_duration || 90} dias
+                    </p>
                   </div>
                 </div>
 
@@ -382,7 +451,7 @@ export default function AdminProgramPage() {
 
             <div className="space-y-6 py-4">
               {/* Basic Info */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm font-medium">Número do Dia *</label>
                   <Input
@@ -392,7 +461,23 @@ export default function AdminProgramPage() {
                       setFormData({ ...formData, day_number: parseInt(e.target.value) })
                     }
                     min={1}
+                    max={selectedDuration}
                   />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Duração do Programa *</label>
+                  <Input
+                    type="number"
+                    value={formData.program_duration || selectedDuration}
+                    onChange={(e) =>
+                      setFormData({ ...formData, program_duration: parseInt(e.target.value) })
+                    }
+                    disabled
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Alterar duração no seletor acima
+                  </p>
                 </div>
                 <div>
                   <label className="text-sm font-medium">XP de Recompensa</label>
@@ -586,6 +671,8 @@ export default function AdminProgramPage() {
     </div>
   )
 }
+
+
 
 
 

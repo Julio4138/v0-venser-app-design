@@ -64,7 +64,15 @@ export default function ProfilePage() {
     try {
       const {
         data: { user },
+        error: userError,
       } = await supabase.auth.getUser()
+
+      if (userError) {
+        console.error("Error getting user:", userError)
+        toast.error(language === "pt" ? "Erro ao verificar autenticação" : "Error verifying authentication")
+        setIsLoading(false)
+        return
+      }
 
       if (!user) {
         setIsLoading(false)
@@ -78,8 +86,23 @@ export default function ProfilePage() {
         .eq("id", user.id)
         .single()
 
+      // PGRST116 = no rows returned (perfil não existe ainda)
+      // 42501 = insufficient_privilege (problema de RLS)
       if (error && error.code !== "PGRST116") {
-        throw error
+        console.error("Error loading profile from database:", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        })
+        
+        // Se for erro de permissão RLS, tenta criar o perfil
+        if (error.code === "42501" || error.message?.includes("permission") || error.message?.includes("policy")) {
+          console.warn("RLS permission error detected, attempting to create profile...")
+          // Não lança erro aqui, deixa tentar criar o perfil abaixo
+        } else {
+          throw error
+        }
       }
 
       if (profile) {
@@ -90,7 +113,7 @@ export default function ProfilePage() {
         setAvatarPreview(profile.avatar_url)
       } else {
         // Create profile if doesn't exist
-        const { data: newProfile } = await supabase
+        const { data: newProfile, error: insertError } = await supabase
           .from("profiles")
           .insert({
             id: user.id,
@@ -101,6 +124,16 @@ export default function ProfilePage() {
           .select()
           .single()
 
+        if (insertError) {
+          console.error("Error creating profile:", {
+            code: insertError.code,
+            message: insertError.message,
+            details: insertError.details,
+            hint: insertError.hint,
+          })
+          throw insertError
+        }
+
         if (newProfile) {
           setProfileData(newProfile)
           setFullName("")
@@ -109,8 +142,38 @@ export default function ProfilePage() {
         }
       }
     } catch (error: any) {
-      console.error("Error loading profile:", error)
-      toast.error(language === "pt" ? "Erro ao carregar perfil" : "Error loading profile")
+      // Log detalhado do erro para debug
+      const errorInfo = {
+        error,
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+        stack: error?.stack,
+        stringified: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      }
+      console.error("Error loading profile:", errorInfo)
+      
+      // Determinar mensagem de erro apropriada
+      let errorMessage = language === "pt" ? "Erro ao carregar perfil" : "Error loading profile"
+      
+      if (error?.message) {
+        errorMessage = error.message
+      } else if (error?.code) {
+        errorMessage = `Erro ${error.code}: ${errorMessage}`
+      } else if (error && typeof error === 'object' && Object.keys(error).length > 0) {
+        // Se o erro tem propriedades mas não tem message, tenta stringificar
+        try {
+          const errorStr = JSON.stringify(error)
+          if (errorStr !== '{}') {
+            errorMessage = `${errorMessage}: ${errorStr}`
+          }
+        } catch (e) {
+          // Ignora erro de stringificação
+        }
+      }
+      
+      toast.error(errorMessage)
     } finally {
       setIsLoading(false)
     }
@@ -313,6 +376,16 @@ export default function ProfilePage() {
 
       if (profileError) throw profileError
 
+      // Update profileData locally
+      setProfileData((prev) => 
+        prev ? {
+          ...prev,
+          full_name: fullName || null,
+          biography: biography || null,
+          language_preference: selectedLanguage,
+        } : null
+      )
+
       // Update language context
       setLanguage(selectedLanguage)
 
@@ -421,17 +494,34 @@ export default function ProfilePage() {
                   </div>
                 )}
               </div>
-              <div>
-                <h2 className="text-xl md:text-2xl font-bold">
-                  {profileData?.full_name || profileData?.email || "Anonymous User"}
+              <div className="w-full space-y-3">
+                {/* Nome destacado */}
+                <h2 className="text-2xl md:text-3xl font-bold">
+                  {profileData?.full_name || "Anonymous User"}
                 </h2>
-                <p className="text-muted-foreground">
+                
+                {/* E-mail em fonte menor */}
+                <p className="text-sm md:text-base text-muted-foreground">
+                  {profileData?.email || ""}
+                </p>
+                
+                {/* Data de entrada */}
+                <p className="text-sm text-muted-foreground">
                   {language === "pt"
                     ? `Membro desde ${formatDate(profileData?.created_at) || "janeiro 2025"}`
                     : language === "es"
                       ? `Miembro desde ${formatDate(profileData?.created_at) || "enero 2025"}`
                       : `Member since ${formatDate(profileData?.created_at) || "January 2025"}`}
                 </p>
+                
+                {/* Biografia */}
+                {profileData?.biography && profileData.biography.trim() && (
+                  <div className="mt-4 pt-4 border-t">
+                    <p className="text-sm md:text-base text-foreground leading-relaxed whitespace-pre-wrap">
+                      {profileData.biography}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </Card>

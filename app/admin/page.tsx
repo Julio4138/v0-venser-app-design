@@ -24,7 +24,8 @@ import {
   Shield,
   Bot,
   Eye,
-  Diamond
+  Diamond,
+  ArrowLeft
 } from "lucide-react"
 import Link from "next/link"
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
@@ -300,44 +301,17 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-background p-6 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex items-center justify-center relative">
+          <Link href="/dashboard" className="absolute left-0">
+            <Button variant="outline" size="icon" className="shrink-0">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div className="flex flex-col items-center justify-center text-center">
             <h1 className="text-3xl font-bold">Painel Administrativo</h1>
             <p className="text-muted-foreground mt-1">
               Visão geral do sistema e métricas de usuários
             </p>
-          </div>
-          <div className="flex gap-2">
-            <Link href="/admin/users">
-              <Button variant="outline">
-                <Users className="h-4 w-4 mr-2" />
-                Usuários
-              </Button>
-            </Link>
-            <Link href="/admin/features">
-              <Button variant="outline">
-                <Target className="h-4 w-4 mr-2" />
-                Funcionalidades
-              </Button>
-            </Link>
-            <Link href="/admin/analytics">
-              <Button variant="outline">
-                <BarChart3 className="h-4 w-4 mr-2" />
-                Analytics
-              </Button>
-            </Link>
-            <Link href="/admin/illusion">
-              <Button variant="outline">
-                <Eye className="h-4 w-4 mr-2" />
-                Ilusões
-              </Button>
-            </Link>
-            <Link href="/admin/dopamine">
-              <Button variant="outline">
-                <Diamond className="h-4 w-4 mr-2" />
-                Dopamine
-              </Button>
-            </Link>
           </div>
         </div>
 

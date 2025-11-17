@@ -9,8 +9,9 @@ export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+  // Se as variáveis de ambiente não estiverem configuradas, retornar erro
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Missing Supabase environment variables')
+    console.error('Supabase environment variables are not configured')
     return supabaseResponse
   }
 
