@@ -25,6 +25,7 @@ interface ProgramDay {
   completed: boolean
   unlocked_at: string | null
   template_id: string | null
+  completed_at?: string | null
 }
 
 interface ProgramDayTemplate {
@@ -62,7 +63,12 @@ export default function ProgramPage() {
   const [xpEarned, setXpEarned] = useState(0)
   const t = translations[language]
 
+  // Program duration options
+  const programDurations = [7, 15, 30, 60, 90, 180, 365]
+  
   // User data
+  const [selectedDuration, setSelectedDuration] = useState<number>(90)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [userProgress, setUserProgress] = useState({
     currentDay: 1,
     totalDays: 90,
@@ -81,6 +87,25 @@ export default function ProgramPage() {
   useEffect(() => {
     loadUserData()
   }, [])
+
+  // Load user's selected duration
+  useEffect(() => {
+    loadUserDuration()
+  }, [])
+
+  // Update duration and reload data when duration changes (skip initial load)
+  useEffect(() => {
+    if (!isInitialLoad && selectedDuration) {
+      const updateAndReload = async () => {
+        await updateUserDuration()
+        // Small delay to ensure database update completes
+        setTimeout(() => {
+          loadUserData()
+        }, 300)
+      }
+      updateAndReload()
+    }
+  }, [selectedDuration, isInitialLoad])
 
   // Load day details when selected
   useEffect(() => {
@@ -121,6 +146,53 @@ export default function ProgramPage() {
     return () => clearTimeout(timeoutId)
   }, [reflectionText, selectedDay, programDays])
 
+  const loadUserDuration = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      const { data: progress } = await supabase
+        .from("user_progress")
+        .select("program_duration")
+        .eq("user_id", user.id)
+        .single()
+
+      if (progress?.program_duration) {
+        setSelectedDuration(progress.program_duration)
+        setUserProgress((prev) => ({
+          ...prev,
+          totalDays: progress.program_duration,
+        }))
+      }
+      setIsInitialLoad(false)
+    } catch (error) {
+      console.error("Error loading user duration:", error)
+      setIsInitialLoad(false)
+    }
+  }
+
+  const updateUserDuration = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      await supabase
+        .from("user_progress")
+        .upsert({
+          user_id: user.id,
+          program_duration: selectedDuration,
+        })
+    } catch (error) {
+      console.error("Error updating user duration:", error)
+    }
+  }
+
   const loadUserData = async () => {
     try {
       const {
@@ -140,9 +212,10 @@ export default function ProgramPage() {
         .single()
 
       if (progress) {
+        const duration = progress.program_duration || selectedDuration || 90
         setUserProgress({
           currentDay: progress.current_day || 1,
-          totalDays: 90,
+          totalDays: duration,
           currentStreak: progress.current_streak || 0,
           totalXp: progress.total_xp || 0,
         })
@@ -161,11 +234,13 @@ export default function ProgramPage() {
 
       setHasCompletedToday((todayCompletion?.length || 0) > 0)
 
-      // Load program days
+      // Load program days for selected duration
+      const duration = progress?.program_duration || selectedDuration || 90
       const { data: days } = await supabase
         .from("program_days")
         .select("*")
         .eq("user_id", user.id)
+        .lte("day_number", duration)
         .order("day_number", { ascending: true })
 
       if (days) {
@@ -233,7 +308,16 @@ export default function ProgramPage() {
         return
       }
 
-      // If no template_id, try to find template by day_number
+      // Get user's program duration
+      const { data: userProgressData } = await supabase
+        .from("user_progress")
+        .select("program_duration")
+        .eq("user_id", user.id)
+        .single()
+      
+      const programDuration = userProgressData?.program_duration || selectedDuration || 90
+
+      // If no template_id, try to find template by day_number and program_duration
       let templateId = programDay.template_id
 
       if (!templateId) {
@@ -241,6 +325,7 @@ export default function ProgramPage() {
           .from("program_day_templates")
           .select("id")
           .eq("day_number", dayNumber)
+          .eq("program_duration", programDuration)
           .eq("is_active", true)
           .single()
 
@@ -498,7 +583,7 @@ export default function ProgramPage() {
         )
 
         // If next day was unlocked, show notification
-        if (data.next_day_unlocked && selectedDay < 90) {
+        if (data.next_day_unlocked && selectedDay < userProgress.totalDays) {
           const unlockDate = data.next_day_unlock_date 
             ? new Date(data.next_day_unlock_date)
             : new Date(Date.now() + 24 * 60 * 60 * 1000) // Próximo dia por padrão
@@ -577,11 +662,12 @@ export default function ProgramPage() {
     return "locked"
   }
 
-  // Generate week groups
+  // Generate week groups based on selected duration
   const weeks = []
-  for (let i = 0; i < userProgress.totalDays; i += 7) {
+  const totalDays = userProgress.totalDays || selectedDuration || 90
+  for (let i = 0; i < totalDays; i += 7) {
     const weekDays = []
-    for (let j = 1; j <= 7 && i + j <= userProgress.totalDays; j++) {
+    for (let j = 1; j <= 7 && i + j <= totalDays; j++) {
       const day = i + j
       const status = getDayStatus(day)
       weekDays.push({ day, status })
@@ -597,7 +683,7 @@ export default function ProgramPage() {
     .filter((d) => d.completed)
     .sort((a, b) => (b.day_number || 0) - (a.day_number || 0))[0]?.day_number || 0
   
-  if (nextDayNumber > 0 && nextDayNumber < 90) {
+  if (nextDayNumber > 0 && nextDayNumber < totalDays) {
     const nextDay = nextDayNumber + 1
     const nextDayStatus = getDayStatus(nextDay)
     if (nextDayStatus === "upcoming") {
@@ -748,13 +834,38 @@ export default function ProgramPage() {
           <Card className="p-5 md:p-6 venser-card-glow relative z-10">
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div>
+                <div className="flex-1">
                   <h1 className="text-2xl md:text-3xl font-bold">{t.dayJourney}</h1>
                   <p className="text-sm text-muted-foreground mt-1">
                     {language === "pt"
-                      ? "Sua jornada de transformação em 90 dias"
-                      : "Your 90-day transformation journey"}
+                      ? `Sua jornada de transformação em ${userProgress.totalDays} dias`
+                      : `Your ${userProgress.totalDays}-day transformation journey`}
                   </p>
+                </div>
+                
+                {/* Duration Selector */}
+                <div className="flex flex-col gap-2 w-full sm:w-auto">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {language === "pt" ? "Duração da Jornada" : "Journey Duration"}
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {programDurations.map((duration) => (
+                      <Button
+                        key={duration}
+                        variant={selectedDuration === duration ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedDuration(duration)}
+                        className={cn(
+                          "transition-all",
+                          selectedDuration === duration
+                            ? "bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] text-white border-0 shadow-lg"
+                            : "hover:bg-accent"
+                        )}
+                      >
+                        {duration} {language === "pt" ? "dias" : "days"}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
@@ -782,6 +893,63 @@ export default function ProgramPage() {
               </div>
             </div>
           </Card>
+
+          {/* Completed Days Review Section */}
+          {(() => {
+            const completedDaysList = getCompletedDays()
+            if (completedDaysList.length > 0) {
+              return (
+                <Card className="p-5 md:p-6 venser-card-glow relative z-10">
+                  <div className="space-y-4">
+                    <div>
+                      <h2 className="text-xl md:text-2xl font-bold mb-2">
+                        {t.reviewCompletedDays}
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        {t.reviewCompletedDaysDesc}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                      {completedDaysList.map((dayNumber) => {
+                        const day = programDays.find((d) => d.day_number === dayNumber)
+                        const completedAt = day?.completed_at 
+                          ? new Date(day.completed_at).toLocaleDateString(language === "pt" ? "pt-BR" : language === "es" ? "es-ES" : "en-US", {
+                              day: "numeric",
+                              month: "short",
+                            })
+                          : null
+                        
+                        return (
+                          <Button
+                            key={dayNumber}
+                            variant="outline"
+                            className="h-auto flex flex-col items-center justify-center gap-2 p-4 hover:bg-gradient-to-br hover:from-[oklch(0.54_0.18_285)]/20 hover:to-[oklch(0.7_0.15_220)]/20 border-2 border-[oklch(0.68_0.18_45)]/30 hover:border-[oklch(0.68_0.18_45)]/60 transition-all"
+                            onClick={() => handleDayClick(dayNumber)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center">
+                                <span className="text-white font-bold text-sm">{dayNumber}</span>
+                              </div>
+                              <Check className="h-4 w-4 text-[oklch(0.68_0.18_45)]" />
+                            </div>
+                            {completedAt && (
+                              <span className="text-xs text-muted-foreground">
+                                {completedAt}
+                              </span>
+                            )}
+                            <span className="text-xs font-medium">
+                              {t.viewDay}
+                            </span>
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </Card>
+              )
+            }
+            return null
+          })()}
 
           {/* Week Grid */}
           {weeks.map((week) => (
@@ -985,7 +1153,7 @@ export default function ProgramPage() {
                 <Star className="h-6 w-6" />
                 <span>+{xpEarned} XP</span>
               </div>
-              {selectedDay && selectedDay < 90 && (
+              {selectedDay && selectedDay < userProgress.totalDays && (
                 <div className="pt-4 border-t">
                   <p className="text-sm text-muted-foreground mb-2">
                     {language === "pt"
