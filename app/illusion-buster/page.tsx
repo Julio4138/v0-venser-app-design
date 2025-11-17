@@ -11,10 +11,11 @@ import { translations } from "@/lib/translations"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { X, ArrowLeft, Lightbulb, AlertCircle, CheckCircle2, Sparkles, Eye, Brain, Trophy, Zap, Target, Flame, Star, Award, TrendingUp } from "lucide-react"
+import { X, ArrowLeft, Lightbulb, AlertCircle, CheckCircle2, Sparkles, Eye, Brain, Trophy, Zap, Target, Flame, Star, Award, TrendingUp, Loader2 } from "lucide-react"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
 import { useIllusionBusterProgress } from "@/lib/use-illusion-buster-progress"
+import { supabase } from "@/lib/supabase/client"
 
 interface Illusion {
   id: string
@@ -71,7 +72,39 @@ export default function IllusionBusterPage() {
   const XP_PER_ILLUSION = 50
   const COMBO_MULTIPLIER = 1.5
 
-  const illusions: Illusion[] = [
+  const [illusions, setIllusions] = useState<Illusion[]>([])
+  const [isLoadingIllusions, setIsLoadingIllusions] = useState(true)
+
+  // Carregar ilusões do banco de dados
+  useEffect(() => {
+    loadIllusions()
+  }, [language])
+
+  const loadIllusions = async () => {
+    try {
+      setIsLoadingIllusions(true)
+      const { data, error } = await supabase
+        .from("illusions")
+        .select("*")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true })
+
+      if (error) throw error
+
+      if (data && data.length > 0) {
+        // Converter dados do banco para o formato da interface Illusion
+        const formattedIllusions: Illusion[] = data.map((item) => ({
+          id: item.id,
+          title: language === "pt" ? item.title_pt : language === "es" ? item.title_es : item.title_en,
+          description: language === "pt" ? item.description_pt : language === "es" ? item.description_es : item.description_en,
+          reality: language === "pt" ? item.reality_pt : language === "es" ? item.reality_es : item.reality_en,
+          category: language === "pt" ? item.category_pt : language === "es" ? item.category_es : item.category_en,
+          xp: item.xp_reward || XP_PER_ILLUSION
+        }))
+        setIllusions(formattedIllusions)
+      } else {
+        // Fallback para ilusões padrão se não houver no banco
+        const defaultIllusions: Illusion[] = [
     {
       id: "1",
       title: language === "pt" ? "Vou usar apenas uma vez" : language === "es" ? "Lo usaré solo una vez" : "I'll just use it once",
@@ -168,7 +201,17 @@ export default function IllusionBusterPage() {
       category: language === "pt" ? "Mudança" : language === "es" ? "Cambio" : "Change",
       xp: XP_PER_ILLUSION
     }
-  ]
+        ]
+        setIllusions(defaultIllusions)
+      }
+    } catch (error) {
+      console.error("Error loading illusions:", error)
+      // Em caso de erro, deixar array vazio ou usar fallback
+      setIllusions([])
+    } finally {
+      setIsLoadingIllusions(false)
+    }
+  }
 
   const badges: Badge[] = useMemo(() => [
     {
@@ -397,8 +440,22 @@ export default function IllusionBusterPage() {
     if (!cardElement) return
 
     const rect = cardElement.getBoundingClientRect()
-    const x = rect.left + rect.width / 2
-    const y = rect.top + rect.height / 2
+    
+    // Para mobile: quando o modal abrir, posicionar os pontos no topo da tela
+    // Para desktop: usar a posição do card
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+    let x: number
+    let y: number
+
+    if (isMobile) {
+      // No mobile, posicionar no topo centralizado quando o modal abrir
+      x = window.innerWidth / 2
+      y = 120 // Posição fixa no topo, abaixo do header
+    } else {
+      // Desktop: usar posição do card
+      x = rect.left + rect.width / 2
+      y = rect.top + rect.height / 2
+    }
 
     const wasNew = !viewedIllusions.has(illusion.id)
 
@@ -406,7 +463,7 @@ export default function IllusionBusterPage() {
       // Create explosion effect
       setIsDestroying(true)
       setIsExploding(true)
-      createParticles(x, y, "#ec4899")
+      createParticles(isMobile ? x : rect.left + rect.width / 2, isMobile ? y : rect.top + rect.height / 2, "#ec4899")
 
       // Calculate XP with combo
       const baseXp = illusion.xp
@@ -439,9 +496,10 @@ export default function IllusionBusterPage() {
         y: y
       })
 
+      // Manter os pontos visíveis por mais tempo (4 segundos)
       setTimeout(() => {
         setShowXpGain(null)
-      }, 2000)
+      }, 4000)
 
       // Reset explosion effect
       setTimeout(() => {
@@ -502,20 +560,26 @@ export default function IllusionBusterPage() {
       {/* XP Gain Animation */}
       {showXpGain && (
         <div
-          className="fixed z-50 pointer-events-none animate-bounce"
+          className="fixed z-50 pointer-events-none xp-gain-animation"
           style={{
             left: `${showXpGain.x}px`,
             top: `${showXpGain.y}px`,
             transform: "translate(-50%, -50%)"
           }}
         >
-          <div className="text-2xl font-bold text-yellow-400 drop-shadow-lg">
-            +{showXpGain.value} XP
-            {combo > 1 && (
-              <span className="text-orange-400 ml-2">
-                {combo}x COMBO!
-              </span>
-            )}
+          <div className="text-xl sm:text-2xl md:text-3xl font-extrabold text-yellow-400 whitespace-nowrap text-center" style={{
+            textShadow: "0 0 20px rgba(250, 204, 21, 0.8), 0 0 40px rgba(250, 204, 21, 0.6), 0 4px 8px rgba(0, 0, 0, 0.9), 2px 2px 4px rgba(0, 0, 0, 0.8)"
+          }}>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-3">
+              <span className="animate-pulse">+{showXpGain.value} XP</span>
+              {combo > 1 && (
+                <span className="text-orange-400 text-base sm:text-lg md:text-xl font-bold" style={{
+                  textShadow: "0 0 15px rgba(251, 146, 60, 0.8), 0 0 30px rgba(251, 146, 60, 0.6), 0 2px 4px rgba(0, 0, 0, 0.9)"
+                }}>
+                  {combo}x COMBO!
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -648,7 +712,27 @@ export default function IllusionBusterPage() {
           </Card>
 
           {/* Illusions Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+          {isLoadingIllusions ? (
+            <Card className="p-8 text-center">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-muted-foreground">
+                  {language === "pt" ? "Carregando ilusões..." : language === "es" ? "Cargando ilusiones..." : "Loading illusions..."}
+                </p>
+              </div>
+            </Card>
+          ) : illusions.length === 0 ? (
+            <Card className="p-8 text-center">
+              <Eye className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-lg font-semibold mb-2">
+                {language === "pt" ? "Nenhuma ilusão disponível" : language === "es" ? "No hay ilusiones disponibles" : "No illusions available"}
+              </h3>
+              <p className="text-muted-foreground">
+                {language === "pt" ? "As ilusões serão carregadas em breve." : language === "es" ? "Las ilusiones se cargarán pronto." : "Illusions will be loaded soon."}
+              </p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {illusions.map((illusion) => {
               const isDestroyed = viewedIllusions.has(illusion.id)
               const categoryColor = getCategoryColor(illusion.category)
@@ -736,6 +820,7 @@ export default function IllusionBusterPage() {
               )
             })}
           </div>
+          )}
 
           {/* Selected Illusion Modal */}
           {selectedIllusion && (

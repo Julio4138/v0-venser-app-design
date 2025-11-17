@@ -11,14 +11,31 @@
 - No menu lateral, clique em **SQL Editor**
 - Clique em **New query**
 
-### 3. Copie e Cole o SQL
-- Abra o arquivo `supabase/migrations/001_initial_schema.sql`
-- Copie **TODO** o conteúdo do arquivo
-- Cole no editor SQL do Supabase
+### 3. Aplique TODAS as Migrações em Ordem
+Execute as migrações na ordem numérica:
 
-### 4. Execute o SQL
-- Clique no botão **Run** (ou pressione Ctrl+Enter)
-- Aguarde a execução completar
+1. **001_initial_schema.sql** - Schema inicial (tabelas básicas)
+2. **002_program_structure.sql** - Estrutura do programa
+3. **003_admin_features.sql** - Recursos de admin
+4. **004_fix_complete_program_day.sql** - Correções
+5. **005_grant_admin_access.sql** - Acesso admin
+6. **006_create_90_days_templates.sql** - Templates de 90 dias
+7. **007_create_default_tasks.sql** - Tarefas padrão
+8. **008_ai_agent_config.sql** - Configuração do agente IA
+9. **008_tony_ai_agent.sql** - Agente Tony
+10. **009_create_storage_bucket.sql** - Storage para avatares
+11. **009_update_complete_program_day_next_day.sql** - Atualizações
+12. **010_add_quitting_reason.sql** - Motivo de desistência
+13. **010_daily_planner.sql** - Planejador diário
+14. **011_illusion_buster_progress.sql** - ⚠️ **IMPORTANTE**: Tabela do Illusion Buster
+15. **012_add_biography_to_profiles.sql** - Biografia nos perfis
+
+**Para cada migração:**
+- Abra o arquivo em `supabase/migrations/`
+- Copie **TODO** o conteúdo
+- Cole no SQL Editor do Supabase
+- Clique em **Run** (ou Ctrl+Enter)
+- Aguarde a execução completar antes de passar para a próxima
 
 ### 5. Verifique se Funcionou
 - Vá em **Table Editor** no menu lateral
@@ -32,6 +49,7 @@
   - ✅ `milestones`
   - ✅ `mood_entries`
   - ✅ `productivity_entries`
+  - ✅ `illusion_buster_progress` ⚠️ **Essencial para o Illusion Buster funcionar!**
 
 ### 6. Verifique os Dados Iniciais
 - Na tabela `daily_missions`, você deve ver 5 missões pré-cadastradas
@@ -71,6 +89,12 @@ Para testar se está funcionando:
 ### Trigger não funciona
 - O trigger é criado automaticamente pelo SQL
 - Se não funcionar, verifique os logs do Supabase
+
+### Erro "Error fetching current progress: {}" no Illusion Buster
+- ⚠️ **Isso significa que a tabela `illusion_buster_progress` não existe!**
+- Execute a migração `011_illusion_buster_progress.sql` no SQL Editor
+- Verifique no Table Editor se a tabela foi criada
+- Recarregue a página do app
 
 ## 📚 Mais Informações
 

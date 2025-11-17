@@ -56,11 +56,44 @@ export function useIllusionBusterProgress() {
         .eq('user_id', user.id)
         .single()
 
-      if (error && error.code !== 'PGRST116') {
-        // PGRST116 = no rows returned
-        console.error("Error loading progress:", error)
-        setProgress(prev => ({ ...prev, isLoading: false, error: error.message }))
-        return
+      if (error) {
+        // PGRST116 = no rows returned (não é um erro real, apenas indica que não há dados)
+        const errorCode = error.code
+        const errorMessage = error.message || ''
+        
+        // Verificar se é erro de tabela não encontrada (42P01 = relation does not exist)
+        if (errorCode === '42P01' || errorMessage.includes('does not exist') || errorMessage.includes('relation') || errorMessage.includes('tabela')) {
+          console.error("❌ ERRO: A tabela 'illusion_buster_progress' não existe no Supabase!")
+          console.error("📋 SOLUÇÃO: Execute a migração '011_illusion_buster_progress.sql' no SQL Editor do Supabase")
+          console.error("Detalhes do erro:", {
+            code: errorCode,
+            message: errorMessage,
+            details: error.details,
+            hint: error.hint
+          })
+          setProgress(prev => ({ 
+            ...prev, 
+            isLoading: false, 
+            error: "Tabela não encontrada. Execute a migração 011_illusion_buster_progress.sql no Supabase." 
+          }))
+          return
+        }
+        
+        // Se for PGRST116, não há dados ainda - continuar normalmente
+        if (errorCode === 'PGRST116') {
+          // Não há registro ainda, continuar normalmente para criar um novo
+        } else {
+          // Erro real - logar com informações detalhadas
+          const errorInfo: any = {}
+          if (errorMessage) errorInfo.message = errorMessage
+          if (errorCode) errorInfo.code = errorCode
+          if (error.details) errorInfo.details = error.details
+          if (error.hint) errorInfo.hint = error.hint
+          
+          console.error("Error loading progress:", errorInfo)
+          setProgress(prev => ({ ...prev, isLoading: false, error: errorMessage || "Erro ao carregar progresso" }))
+          return
+        }
       }
 
       if (data) {
@@ -99,8 +132,22 @@ export function useIllusionBusterProgress() {
           .single()
 
         if (insertError) {
-          console.error("Error creating progress:", insertError)
-          setProgress(prev => ({ ...prev, isLoading: false, error: insertError.message }))
+          const errorInfo: any = {}
+          if (insertError.message) errorInfo.message = insertError.message
+          if (insertError.code) errorInfo.code = insertError.code
+          if (insertError.details) errorInfo.details = insertError.details
+          if (insertError.hint) errorInfo.hint = insertError.hint
+          
+          if (Object.keys(errorInfo).length === 0) {
+            try {
+              errorInfo.rawError = JSON.stringify(insertError)
+            } catch {
+              errorInfo.rawError = String(insertError)
+            }
+          }
+          
+          console.error("Error creating progress:", errorInfo)
+          setProgress(prev => ({ ...prev, isLoading: false, error: insertError.message || "Erro ao criar progresso" }))
         } else if (newData) {
           setProgress({
             id: newData.id,
@@ -122,8 +169,23 @@ export function useIllusionBusterProgress() {
         }
       }
     } catch (error: any) {
-      console.error("Error in loadProgress:", error)
-      setProgress(prev => ({ ...prev, isLoading: false, error: error?.message || "Unknown error" }))
+      const errorInfo: any = {}
+      if (error?.message) errorInfo.message = error.message
+      if (error?.code) errorInfo.code = error.code
+      if (error?.details) errorInfo.details = error.details
+      if (error?.hint) errorInfo.hint = error.hint
+      if (error?.stack) errorInfo.stack = error.stack
+      
+      if (Object.keys(errorInfo).length === 0) {
+        try {
+          errorInfo.rawError = JSON.stringify(error)
+        } catch {
+          errorInfo.rawError = String(error)
+        }
+      }
+      
+      console.error("Error in loadProgress:", errorInfo)
+      setProgress(prev => ({ ...prev, isLoading: false, error: error?.message || "Erro desconhecido ao carregar progresso" }))
     }
   }, [])
 
@@ -144,9 +206,38 @@ export function useIllusionBusterProgress() {
         .eq('user_id', user.id)
         .single()
 
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error("Error fetching current progress:", fetchError)
-        return
+      if (fetchError) {
+        // PGRST116 = no rows returned (não é um erro real, apenas indica que não há dados)
+        const errorCode = fetchError.code
+        const errorMessage = fetchError.message || ''
+        
+        // Verificar se é erro de tabela não encontrada (42P01 = relation does not exist)
+        if (errorCode === '42P01' || errorMessage.includes('does not exist') || errorMessage.includes('relation') || errorMessage.includes('tabela')) {
+          console.error("❌ ERRO: A tabela 'illusion_buster_progress' não existe no Supabase!")
+          console.error("📋 SOLUÇÃO: Execute a migração '011_illusion_buster_progress.sql' no SQL Editor do Supabase")
+          console.error("Detalhes do erro:", {
+            code: errorCode,
+            message: errorMessage,
+            details: fetchError.details,
+            hint: fetchError.hint
+          })
+          return
+        }
+        
+        // Se for PGRST116, não há dados ainda - continuar normalmente
+        if (errorCode === 'PGRST116') {
+          // Não há registro ainda, continuar normalmente para criar um novo
+        } else {
+          // Erro real - logar com informações detalhadas
+          const errorInfo: any = {}
+          if (errorMessage) errorInfo.message = errorMessage
+          if (errorCode) errorInfo.code = errorCode
+          if (fetchError.details) errorInfo.details = fetchError.details
+          if (fetchError.hint) errorInfo.hint = fetchError.hint
+          
+          console.error("Error fetching current progress:", errorInfo)
+          return
+        }
       }
 
       // Preparar dados para atualização
@@ -190,7 +281,21 @@ export function useIllusionBusterProgress() {
           .single()
 
         if (insertError) {
-          console.error("Error creating progress:", insertError)
+          const errorInfo: any = {}
+          if (insertError.message) errorInfo.message = insertError.message
+          if (insertError.code) errorInfo.code = insertError.code
+          if (insertError.details) errorInfo.details = insertError.details
+          if (insertError.hint) errorInfo.hint = insertError.hint
+          
+          if (Object.keys(errorInfo).length === 0) {
+            try {
+              errorInfo.rawError = JSON.stringify(insertError)
+            } catch {
+              errorInfo.rawError = String(insertError)
+            }
+          }
+          
+          console.error("Error creating progress:", errorInfo)
           return
         }
 
@@ -214,7 +319,21 @@ export function useIllusionBusterProgress() {
           .eq('user_id', user.id)
 
         if (updateError) {
-          console.error("Error updating progress:", updateError)
+          const errorInfo: any = {}
+          if (updateError.message) errorInfo.message = updateError.message
+          if (updateError.code) errorInfo.code = updateError.code
+          if (updateError.details) errorInfo.details = updateError.details
+          if (updateError.hint) errorInfo.hint = updateError.hint
+          
+          if (Object.keys(errorInfo).length === 0) {
+            try {
+              errorInfo.rawError = JSON.stringify(updateError)
+            } catch {
+              errorInfo.rawError = String(updateError)
+            }
+          }
+          
+          console.error("Error updating progress:", errorInfo)
           return
         }
 
@@ -231,7 +350,22 @@ export function useIllusionBusterProgress() {
         }))
       }
     } catch (error: any) {
-      console.error("Error in updateProgress:", error)
+      const errorInfo: any = {}
+      if (error?.message) errorInfo.message = error.message
+      if (error?.code) errorInfo.code = error.code
+      if (error?.details) errorInfo.details = error.details
+      if (error?.hint) errorInfo.hint = error.hint
+      if (error?.stack) errorInfo.stack = error.stack
+      
+      if (Object.keys(errorInfo).length === 0) {
+        try {
+          errorInfo.rawError = JSON.stringify(error)
+        } catch {
+          errorInfo.rawError = String(error)
+        }
+      }
+      
+      console.error("Error in updateProgress:", errorInfo)
     }
   }, [])
 

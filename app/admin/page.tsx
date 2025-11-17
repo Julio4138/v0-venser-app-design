@@ -22,7 +22,8 @@ import {
   Settings,
   BookOpen,
   Shield,
-  Bot
+  Bot,
+  Eye
 } from "lucide-react"
 import Link from "next/link"
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
@@ -322,6 +323,12 @@ export default function AdminDashboard() {
               <Button variant="outline">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Analytics
+              </Button>
+            </Link>
+            <Link href="/admin/illusion">
+              <Button variant="outline">
+                <Eye className="h-4 w-4 mr-2" />
+                Ilusões
               </Button>
             </Link>
           </div>
