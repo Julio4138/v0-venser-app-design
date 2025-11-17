@@ -65,7 +65,7 @@ export default function ToolsPage() {
   const toolsList = [
     { title: "Illusion Buster", icon: X, iconBg: "bg-pink-500", iconColor: "text-white", iconShape: "square", path: "/illusion-buster" },
     { title: "Dopamine Visualiser", icon: Diamond, iconBg: "bg-orange-500", iconColor: "text-white", iconShape: "diamond", path: "/dopamine-visualiser" },
-    { title: "Journal", icon: FileText, iconBg: "bg-yellow-500", iconColor: "text-white", iconShape: "square", path: "/journal" },
+    { title: "Journal", icon: FileText, iconBg: "bg-yellow-500", iconColor: "text-white", iconShape: "square", path: "/program" },
   ]
 
   const handleToolClick = (path: string) => {
