@@ -21,7 +21,8 @@ import {
   Loader2,
   Edit,
   Trash2,
-  ArrowLeft
+  ArrowLeft,
+  Plus
 } from "lucide-react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
@@ -53,6 +54,16 @@ export default function AdminUsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  
+  // Form states for creating user
+  const [newUserEmail, setNewUserEmail] = useState("")
+  const [newUserPassword, setNewUserPassword] = useState("")
+  const [newUserFullName, setNewUserFullName] = useState("")
+  const [newUserLanguage, setNewUserLanguage] = useState<"pt" | "en" | "es">("pt")
+  const [newUserIsPro, setNewUserIsPro] = useState(false)
+  const [newUserStartDate, setNewUserStartDate] = useState("")
 
   useEffect(() => {
     checkAdminAccess()
@@ -111,16 +122,31 @@ export default function AdminUsersPage() {
         .select("*")
         .order("created_at", { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error("Error loading profiles:", error)
+        toast.error(`Erro ao carregar usuários: ${error.message}`)
+        return
+      }
+
+      if (!profilesData || profilesData.length === 0) {
+        setUsers([])
+        setFilteredUsers([])
+        return
+      }
 
       // Carregar progresso de cada usuário
       const usersWithProgress = await Promise.all(
-        (profilesData || []).map(async (profile) => {
-          const { data: progressData } = await supabase
+        profilesData.map(async (profile) => {
+          const { data: progressData, error: progressError } = await supabase
             .from("user_progress")
             .select("*")
             .eq("user_id", profile.id)
             .single()
+
+          if (progressError && progressError.code !== 'PGRST116') {
+            // PGRST116 = no rows returned, que é ok se o usuário não tem progresso ainda
+            console.warn(`Error loading progress for user ${profile.id}:`, progressError)
+          }
 
           return {
             ...profile,
@@ -131,9 +157,9 @@ export default function AdminUsersPage() {
 
       setUsers(usersWithProgress as User[])
       setFilteredUsers(usersWithProgress as User[])
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading users:", error)
-      toast.error("Erro ao carregar usuários")
+      toast.error(`Erro ao carregar usuários: ${error.message || 'Erro desconhecido'}`)
     } finally {
       setLoading(false)
     }
@@ -250,6 +276,81 @@ export default function AdminUsersPage() {
     }
   }
 
+  const handleCreateUser = async () => {
+    if (!newUserEmail || !newUserPassword) {
+      toast.error("Email e senha são obrigatórios")
+      return
+    }
+
+    if (newUserPassword.length < 6) {
+      toast.error("A senha deve ter pelo menos 6 caracteres")
+      return
+    }
+
+    try {
+      setIsCreating(true)
+
+      // Obter token de autenticação do admin
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        toast.error("Sessão expirada. Faça login novamente.")
+        return
+      }
+
+      const response = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          email: newUserEmail,
+          password: newUserPassword,
+          full_name: newUserFullName || null,
+          language_preference: newUserLanguage,
+          is_pro: newUserIsPro,
+          start_date: newUserStartDate || new Date().toISOString().split('T')[0],
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao criar usuário')
+      }
+
+      // Log da atividade
+      await supabase.rpc('log_admin_activity', {
+        p_action_type: 'user_created',
+        p_entity_type: 'user',
+        p_entity_id: data.user.id,
+        p_details: { 
+          email: newUserEmail,
+          full_name: newUserFullName,
+          is_pro: newUserIsPro
+        }
+      })
+
+      toast.success("Usuário criado com sucesso!")
+      setIsCreateDialogOpen(false)
+      
+      // Reset form
+      setNewUserEmail("")
+      setNewUserPassword("")
+      setNewUserFullName("")
+      setNewUserLanguage("pt")
+      setNewUserIsPro(false)
+      setNewUserStartDate("")
+      
+      await loadUsers()
+    } catch (error: any) {
+      console.error("Error creating user:", error)
+      toast.error(error.message || "Erro ao criar usuário")
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -280,11 +381,17 @@ export default function AdminUsersPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">
-              {filteredUsers.length} usuário(s)
-            </span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">
+                {filteredUsers.length} usuário(s)
+              </span>
+            </div>
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Criar Usuário
+            </Button>
           </div>
         </div>
 
@@ -467,6 +574,118 @@ export default function AdminUsersPage() {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Create User Dialog */}
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Criar Novo Usuário</DialogTitle>
+              <DialogDescription>
+                Crie uma nova conta de usuário com permissões e acessos personalizados
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <label className="text-sm font-medium">Email *</label>
+                <Input
+                  type="email"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  placeholder="usuario@exemplo.com"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Senha *</label>
+                <Input
+                  type="password"
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  A senha deve ter pelo menos 6 caracteres
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Nome Completo</label>
+                <Input
+                  value={newUserFullName}
+                  onChange={(e) => setNewUserFullName(e.target.value)}
+                  placeholder="Nome completo do usuário"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Idioma</label>
+                <select
+                  value={newUserLanguage}
+                  onChange={(e) => setNewUserLanguage(e.target.value as "pt" | "en" | "es")}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 py-1 text-sm mt-1"
+                >
+                  <option value="pt">Português</option>
+                  <option value="en">English</option>
+                  <option value="es">Español</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Data de Início</label>
+                <Input
+                  type="date"
+                  value={newUserStartDate}
+                  onChange={(e) => setNewUserStartDate(e.target.value)}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Deixe em branco para usar a data atual
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="new_user_is_pro"
+                  checked={newUserIsPro}
+                  onChange={(e) => setNewUserIsPro(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                <label htmlFor="new_user_is_pro" className="text-sm font-medium">
+                  Conceder privilégios de administrador
+                </label>
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsCreateDialogOpen(false)
+                    setNewUserEmail("")
+                    setNewUserPassword("")
+                    setNewUserFullName("")
+                    setNewUserLanguage("pt")
+                    setNewUserIsPro(false)
+                    setNewUserStartDate("")
+                  }}
+                  disabled={isCreating}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={handleCreateUser}
+                  disabled={isCreating || !newUserEmail || !newUserPassword}
+                >
+                  {isCreating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Criando...
+                    </>
+                  ) : (
+                    "Criar Usuário"
+                  )}
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
