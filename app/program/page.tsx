@@ -468,10 +468,9 @@ export default function ProgramPage() {
 
       if (error) throw error
 
-      // Update local state
-      setDayTasks((prev) =>
-        prev.map((task) => (task.id === taskId ? { ...task, completed } : task))
-      )
+      // Update local state and calculate completed tasks
+      const updatedTasks = dayTasks.map((task) => (task.id === taskId ? { ...task, completed } : task))
+      setDayTasks(updatedTasks)
 
       // Show notification for completed tasks
       if (completed) {
@@ -485,11 +484,16 @@ export default function ProgramPage() {
         )
       }
 
-      // Update total tasks count in program_days
-      const completedTasks = dayTasks.filter((t) => t.completed || (t.id === taskId && completed))
-      const totalTasks = dayTasks.length
+      // Update total tasks count in program_days using updated tasks
+      const completedTasks = updatedTasks.filter((t) => t.completed)
+      const totalTasks = updatedTasks.length
 
-      await supabase
+      if (!selectedDay) {
+        console.error("selectedDay is null, cannot update program_days")
+        return
+      }
+
+      const { error: updateError } = await supabase
         .from("program_days")
         .update({
           tasks_completed: completedTasks.length,
@@ -497,6 +501,11 @@ export default function ProgramPage() {
         })
         .eq("user_id", user.id)
         .eq("day_number", selectedDay)
+
+      if (updateError) {
+        console.error("Error updating program_days:", updateError)
+        throw updateError
+      }
     } catch (error) {
       console.error("Error updating task:", error)
       toast.error(language === "pt" ? "Erro ao atualizar tarefa" : "Error updating task")
@@ -539,7 +548,33 @@ export default function ProgramPage() {
         data: { user },
       } = await supabase.auth.getUser()
 
-      if (!user) return
+      if (!user) {
+        toast.error(language === "pt" ? "Usuário não autenticado" : "User not authenticated")
+        setIsCompleting(false)
+        return
+      }
+
+      // Validar se o dia existe e tem template antes de chamar a RPC
+      const day = programDays.find((d) => d.day_number === selectedDay)
+      if (!day) {
+        toast.error(
+          language === "pt" 
+            ? "Dia não encontrado. Por favor, recarregue a página."
+            : "Day not found. Please reload the page."
+        )
+        setIsCompleting(false)
+        return
+      }
+
+      if (!day.template_id) {
+        toast.error(
+          language === "pt"
+            ? "Template não encontrado para este dia. Entre em contato com o suporte."
+            : "Template not found for this day. Please contact support."
+        )
+        setIsCompleting(false)
+        return
+      }
 
       // Call the complete function
       const { data, error } = await supabase.rpc("complete_program_day", {
@@ -548,7 +583,28 @@ export default function ProgramPage() {
         p_reflection_text: reflectionText?.trim() || null,
       })
 
-      if (error) throw error
+      if (error) {
+        // Melhorar extração da mensagem de erro do Supabase
+        let errorMessage = error.message || error.details || error.hint
+        
+        // Se não houver mensagem, tentar extrair do código de erro
+        if (!errorMessage && error.code) {
+          errorMessage = `Erro ${error.code}: ${language === "pt" ? "Erro ao completar dia" : "Error completing day"}`
+        }
+        
+        // Log detalhado para debug
+        console.error("Error completing day - RPC Error:", {
+          error,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          selectedDay,
+          userId: user.id,
+        })
+        
+        throw new Error(errorMessage || (language === "pt" ? "Erro ao completar dia" : "Error completing day"))
+      }
 
       // Verificar se já completou um dia hoje
       if (data?.error === 'already_completed_today') {
@@ -560,6 +616,15 @@ export default function ProgramPage() {
             duration: 5000,
           }
         )
+        setIsCompleting(false)
+        return
+      }
+
+      // Verificar se a função retornou sucesso
+      if (!data?.success) {
+        const errorMsg = data?.message || data?.error || (language === "pt" ? "Erro ao completar dia" : "Error completing day")
+        console.error("Error completing day - Function returned error:", data)
+        toast.error(errorMsg)
         setIsCompleting(false)
         return
       }
@@ -583,7 +648,7 @@ export default function ProgramPage() {
         )
 
         // If next day was unlocked, show notification
-        if (data.next_day_unlocked && selectedDay < userProgress.totalDays) {
+        if (data.next_day_unlocked && selectedDay < selectedDuration) {
           const unlockDate = data.next_day_unlock_date 
             ? new Date(data.next_day_unlock_date)
             : new Date(Date.now() + 24 * 60 * 60 * 1000) // Próximo dia por padrão
@@ -613,11 +678,57 @@ export default function ProgramPage() {
         }, 4000)
       }
     } catch (error: any) {
-      console.error("Error completing day:", error)
-      toast.error(
-        error.message ||
-          (language === "pt" ? "Erro ao completar dia" : "Error completing day")
-      )
+      // Log detalhado para debug
+      console.error("Error completing day - Catch block:", {
+        error,
+        errorType: typeof error,
+        errorConstructor: error?.constructor?.name,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code,
+        stack: error?.stack,
+        selectedDay,
+        stringified: JSON.stringify(error),
+      })
+      
+      // Melhorar extração da mensagem de erro
+      let errorMessage = error?.message
+      
+      // Tentar extrair de diferentes propriedades do erro do Supabase
+      if (!errorMessage) {
+        errorMessage = error?.details || error?.hint || error?.code
+      }
+      
+      // Se ainda não tiver mensagem, tentar toString
+      if (!errorMessage) {
+        const errorString = error?.toString()
+        // Verificar se toString não retorna apenas "[object Object]"
+        if (errorString && errorString !== "[object Object]") {
+          errorMessage = errorString
+        }
+      }
+      
+      // Se ainda não tiver mensagem, tentar JSON.stringify (mas verificar se não é apenas "{}")
+      if (!errorMessage) {
+        try {
+          const jsonError = JSON.stringify(error)
+          if (jsonError && jsonError !== "{}" && jsonError !== "null") {
+            errorMessage = jsonError
+          }
+        } catch (e) {
+          // Ignorar erro de serialização
+        }
+      }
+      
+      // Mensagem padrão se ainda não tiver nada
+      if (!errorMessage || errorMessage === "{}" || errorMessage === "[object Object]") {
+        errorMessage = language === "pt" 
+          ? "Erro desconhecido ao completar dia. Por favor, tente novamente ou entre em contato com o suporte."
+          : "Unknown error completing day. Please try again or contact support."
+      }
+      
+      toast.error(errorMessage)
     } finally {
       setIsCompleting(false)
     }
@@ -664,7 +775,8 @@ export default function ProgramPage() {
 
   // Generate week groups based on selected duration
   const weeks = []
-  const totalDays = userProgress.totalDays || selectedDuration || 90
+  // Usar selectedDuration diretamente para filtrar os dias exibidos
+  const totalDays = selectedDuration || 90
   for (let i = 0; i < totalDays; i += 7) {
     const weekDays = []
     for (let j = 1; j <= 7 && i + j <= totalDays; j++) {
@@ -679,21 +791,25 @@ export default function ProgramPage() {
   }
   
   // Also include the next day if it's upcoming (visible but not clickable)
+  // Mas apenas se estiver dentro da duração selecionada
   const nextDayNumber = programDays
     .filter((d) => d.completed)
     .sort((a, b) => (b.day_number || 0) - (a.day_number || 0))[0]?.day_number || 0
   
   if (nextDayNumber > 0 && nextDayNumber < totalDays) {
     const nextDay = nextDayNumber + 1
-    const nextDayStatus = getDayStatus(nextDay)
-    if (nextDayStatus === "upcoming") {
-      // Find the week that should contain this day
-      const weekIndex = Math.floor((nextDay - 1) / 7)
-      if (weeks[weekIndex]) {
-        // Check if the day is not already in the week
-        if (!weeks[weekIndex].days.find((d) => d.day === nextDay)) {
-          weeks[weekIndex].days.push({ day: nextDay, status: "upcoming" })
-          weeks[weekIndex].days.sort((a, b) => a.day - b.day)
+    // Só adicionar se o próximo dia estiver dentro da duração selecionada
+    if (nextDay <= totalDays) {
+      const nextDayStatus = getDayStatus(nextDay)
+      if (nextDayStatus === "upcoming") {
+        // Find the week that should contain this day
+        const weekIndex = Math.floor((nextDay - 1) / 7)
+        if (weeks[weekIndex]) {
+          // Check if the day is not already in the week
+          if (!weeks[weekIndex].days.find((d) => d.day === nextDay)) {
+            weeks[weekIndex].days.push({ day: nextDay, status: "upcoming" })
+            weeks[weekIndex].days.sort((a, b) => a.day - b.day)
+          }
         }
       }
     }
@@ -838,8 +954,8 @@ export default function ProgramPage() {
                   <h1 className="text-2xl md:text-3xl font-bold">{t.dayJourney}</h1>
                   <p className="text-sm text-muted-foreground mt-1">
                     {language === "pt"
-                      ? `Sua jornada de transformação em ${userProgress.totalDays} dias`
-                      : `Your ${userProgress.totalDays}-day transformation journey`}
+                      ? `Sua jornada de transformação em ${selectedDuration} dias`
+                      : `Your ${selectedDuration}-day transformation journey`}
                   </p>
                 </div>
                 
@@ -854,7 +970,10 @@ export default function ProgramPage() {
                         key={duration}
                         variant={selectedDuration === duration ? "default" : "outline"}
                         size="sm"
-                        onClick={() => setSelectedDuration(duration)}
+                        onClick={() => {
+                          setSelectedDuration(duration)
+                          setSelectedDay(null) // Limpar seleção de dia ao mudar duração
+                        }}
                         className={cn(
                           "transition-all",
                           selectedDuration === duration
@@ -885,91 +1004,60 @@ export default function ProgramPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>
-                    {userProgress.currentDay} / {userProgress.totalDays}
+                    {userProgress.currentDay} / {selectedDuration}
                   </span>
-                  <span>{Math.round((userProgress.currentDay / userProgress.totalDays) * 100)}%</span>
+                  <span>{Math.round((userProgress.currentDay / selectedDuration) * 100)}%</span>
                 </div>
-                <Progress value={(userProgress.currentDay / userProgress.totalDays) * 100} className="h-2" />
+                <Progress value={(userProgress.currentDay / selectedDuration) * 100} className="h-2" />
               </div>
             </div>
           </Card>
 
-          {/* Completed Days Review Section */}
-          {(() => {
-            const completedDaysList = getCompletedDays()
-            if (completedDaysList.length > 0) {
-              return (
-                <Card className="p-5 md:p-6 venser-card-glow relative z-10">
-                  <div className="space-y-4">
-                    <div>
-                      <h2 className="text-xl md:text-2xl font-bold mb-2">
-                        {t.reviewCompletedDays}
-                      </h2>
-                      <p className="text-sm text-muted-foreground">
-                        {t.reviewCompletedDaysDesc}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-                      {completedDaysList.map((dayNumber) => {
-                        const day = programDays.find((d) => d.day_number === dayNumber)
-                        const completedAt = day?.completed_at 
-                          ? new Date(day.completed_at).toLocaleDateString(language === "pt" ? "pt-BR" : language === "es" ? "es-ES" : "en-US", {
-                              day: "numeric",
-                              month: "short",
-                            })
-                          : null
-                        
-                        return (
-                          <Button
-                            key={dayNumber}
-                            variant="outline"
-                            className="h-auto flex flex-col items-center justify-center gap-2 p-4 hover:bg-gradient-to-br hover:from-[oklch(0.54_0.18_285)]/20 hover:to-[oklch(0.7_0.15_220)]/20 border-2 border-[oklch(0.68_0.18_45)]/30 hover:border-[oklch(0.68_0.18_45)]/60 transition-all"
-                            onClick={() => handleDayClick(dayNumber)}
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center">
-                                <span className="text-white font-bold text-sm">{dayNumber}</span>
-                              </div>
-                              <Check className="h-4 w-4 text-[oklch(0.68_0.18_45)]" />
-                            </div>
-                            {completedAt && (
-                              <span className="text-xs text-muted-foreground">
-                                {completedAt}
-                              </span>
-                            )}
-                            <span className="text-xs font-medium">
-                              {t.viewDay}
-                            </span>
-                          </Button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </Card>
-              )
-            }
-            return null
-          })()}
 
           {/* Week Grid */}
-          {weeks.map((week) => (
-            <div key={week.number} className="space-y-4">
-              <h2 className="text-lg font-semibold text-muted-foreground">
-                {t.week} {week.number}
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
-                {week.days.map((dayData) => (
-                  <DayCard
-                    key={dayData.day}
-                    day={dayData.day}
-                    status={dayData.status}
-                    streak={dayData.status === "current" && userProgress.currentStreak >= 7}
-                    onClick={() => handleDayClick(dayData.day)}
-                  />
-                ))}
+          {selectedDay ? (
+            // Mostrar apenas o dia selecionado
+            (() => {
+              const selectedWeek = Math.ceil(selectedDay / 7)
+              const dayStatus = getDayStatus(selectedDay)
+              return (
+                <div className="space-y-4">
+                  <h2 className="text-lg font-semibold text-muted-foreground">
+                    {t.week} {selectedWeek}
+                  </h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
+                    <DayCard
+                      key={selectedDay}
+                      day={selectedDay}
+                      status={dayStatus}
+                      streak={dayStatus === "current" && userProgress.currentStreak >= 7}
+                      onClick={() => handleDayClick(selectedDay)}
+                    />
+                  </div>
+                </div>
+              )
+            })()
+          ) : (
+            // Mostrar todos os dias quando nenhum está selecionado
+            weeks.map((week) => (
+              <div key={week.number} className="space-y-4">
+                <h2 className="text-lg font-semibold text-muted-foreground">
+                  {t.week} {week.number}
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
+                  {week.days.map((dayData) => (
+                    <DayCard
+                      key={dayData.day}
+                      day={dayData.day}
+                      status={dayData.status}
+                      streak={dayData.status === "current" && userProgress.currentStreak >= 7}
+                      onClick={() => handleDayClick(dayData.day)}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </main>
       </div>
 
