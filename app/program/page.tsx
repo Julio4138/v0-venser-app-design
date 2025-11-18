@@ -114,6 +114,54 @@ export default function ProgramPage() {
     }
   }, [selectedDay, language])
 
+  // Subscribe to program_days changes for real-time sync
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null
+
+    const setupSubscription = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      channel = supabase
+        .channel(`program_days_changes_${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'program_days',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            // Reload day details if the current selected day changed
+            if (selectedDay && payload.new && (payload.new as any).day_number === selectedDay) {
+              loadDayDetails(selectedDay)
+            }
+            // Reload user data to update program days list
+            loadUserData()
+          }
+        )
+        .subscribe()
+
+      return () => {
+        if (channel) {
+          supabase.removeChannel(channel)
+        }
+      }
+    }
+
+    setupSubscription()
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [selectedDay, loadDayDetails, loadUserData])
+
   // Auto-save reflection with debounce
   useEffect(() => {
     if (!selectedDay || !reflectionText) return
@@ -370,12 +418,31 @@ export default function ProgramPage() {
         })
       }
 
-      // Load tasks
+      // Load tasks from template
       const { data: tasks } = await supabase
         .from("program_day_tasks")
         .select("*")
         .eq("template_id", templateId)
         .order("task_order", { ascending: true })
+
+      // Load planner tasks from program_days
+      const { data: dayDataForPlanner } = await supabase
+        .from("program_days")
+        .select("planner_tasks, current_day")
+        .eq("user_id", user.id)
+        .eq("day_number", dayNumber)
+        .single()
+
+      const plannerTasks = (dayDataForPlanner?.planner_tasks as Array<{ id: string; text: string; completed: boolean }>) || []
+      
+      // Get current day to check if we should show planner tasks
+      const { data: progressData } = await supabase
+        .from("user_progress")
+        .select("current_day")
+        .eq("user_id", user.id)
+        .single()
+
+      const isCurrentDay = progressData?.current_day === dayNumber
 
       if (tasks && tasks.length > 0) {
         // Load user progress for tasks
@@ -401,16 +468,48 @@ export default function ProgramPage() {
           }
         })
 
-        setDayTasks(tasksWithProgress)
+        // Add planner tasks if this is the current day
+        if (isCurrentDay && plannerTasks.length > 0) {
+          const plannerTasksFormatted: Task[] = plannerTasks.map((pt) => ({
+            id: `planner_${pt.id}`,
+            title: pt.text,
+            description: undefined,
+            task_type: "checklist" as const,
+            xp_reward: 5, // Default XP for planner tasks
+            is_required: false,
+            completed: pt.completed || false,
+          }))
+
+          setDayTasks([...tasksWithProgress, ...plannerTasksFormatted])
+        } else {
+          setDayTasks(tasksWithProgress)
+        }
 
         // Update total_tasks in program_days
+        const totalTasksCount = isCurrentDay 
+          ? tasks.length + plannerTasks.length 
+          : tasks.length
         await supabase
           .from("program_days")
-          .update({ total_tasks: tasks.length })
+          .update({ total_tasks: totalTasksCount })
           .eq("user_id", user.id)
           .eq("day_number", dayNumber)
       } else {
-        setDayTasks([])
+        // Only planner tasks available
+        if (isCurrentDay && plannerTasks.length > 0) {
+          const plannerTasksFormatted: Task[] = plannerTasks.map((pt) => ({
+            id: `planner_${pt.id}`,
+            title: pt.text,
+            description: undefined,
+            task_type: "checklist" as const,
+            xp_reward: 5,
+            is_required: false,
+            completed: pt.completed || false,
+          }))
+          setDayTasks(plannerTasksFormatted)
+        } else {
+          setDayTasks([])
+        }
       }
 
       // Load reflection if exists
@@ -451,38 +550,88 @@ export default function ProgramPage() {
         return
       }
 
-      // Find task to get XP reward
-      const task = dayTasks.find((t) => t.id === taskId)
-      const xpReward = task?.xp_reward || 0
+      // Check if this is a planner task
+      const isPlannerTask = taskId.startsWith("planner_")
+      
+      if (isPlannerTask) {
+        // Update planner task in program_days
+        const { data: dayData } = await supabase
+          .from("program_days")
+          .select("planner_tasks, current_day")
+          .eq("user_id", user.id)
+          .eq("day_number", selectedDay)
+          .single()
 
-      // Update task progress
-      const { error } = await supabase
-        .from("program_day_user_progress")
-        .upsert({
-          user_id: user.id,
-          day_number: selectedDay,
-          task_id: taskId,
-          completed,
-          completed_at: completed ? new Date().toISOString() : null,
-        })
+        if (dayData?.planner_tasks) {
+          const plannerTasks = (dayData.planner_tasks as Array<{ id: string; text: string; completed: boolean }>) || []
+          const actualTaskId = taskId.replace("planner_", "")
+          const updatedPlannerTasks = plannerTasks.map((pt) =>
+            pt.id === actualTaskId ? { ...pt, completed } : pt
+          )
 
-      if (error) throw error
+          await supabase
+            .from("program_days")
+            .update({ planner_tasks: updatedPlannerTasks })
+            .eq("user_id", user.id)
+            .eq("day_number", selectedDay)
+
+          // Also sync back to daily_planner
+          const today = new Date().toISOString().split("T")[0]
+          const { data: plannerData } = await supabase
+            .from("daily_planner")
+            .select("tasks")
+            .eq("user_id", user.id)
+            .eq("planner_date", today)
+            .single()
+
+          if (plannerData?.tasks) {
+            const dailyPlannerTasks = (plannerData.tasks as Array<{ id: string; text: string; completed: boolean }>) || []
+            const updatedDailyPlannerTasks = dailyPlannerTasks.map((t) =>
+              t.id === actualTaskId ? { ...t, completed } : t
+            )
+
+            await supabase
+              .from("daily_planner")
+              .update({ tasks: updatedDailyPlannerTasks })
+              .eq("user_id", user.id)
+              .eq("planner_date", today)
+          }
+        }
+      } else {
+        // Regular program task
+        // Find task to get XP reward
+        const task = dayTasks.find((t) => t.id === taskId)
+        const xpReward = task?.xp_reward || 0
+
+        // Update task progress
+        const { error } = await supabase
+          .from("program_day_user_progress")
+          .upsert({
+            user_id: user.id,
+            day_number: selectedDay,
+            task_id: taskId,
+            completed,
+            completed_at: completed ? new Date().toISOString() : null,
+          })
+
+        if (error) throw error
+
+        // Show notification for completed tasks
+        if (completed) {
+          toast.success(
+            language === "pt"
+              ? `Tarefa concluída! +${xpReward} XP`
+              : `Task completed! +${xpReward} XP`,
+            {
+              duration: 2000,
+            }
+          )
+        }
+      }
 
       // Update local state and calculate completed tasks
       const updatedTasks = dayTasks.map((task) => (task.id === taskId ? { ...task, completed } : task))
       setDayTasks(updatedTasks)
-
-      // Show notification for completed tasks
-      if (completed) {
-        toast.success(
-          language === "pt"
-            ? `Tarefa concluída! +${xpReward} XP`
-            : `Task completed! +${xpReward} XP`,
-          {
-            duration: 2000,
-          }
-        )
-      }
 
       // Update total tasks count in program_days using updated tasks
       const completedTasks = updatedTasks.filter((t) => t.completed)
@@ -592,39 +741,73 @@ export default function ProgramPage() {
           errorMessage = `Erro ${error.code}: ${language === "pt" ? "Erro ao completar dia" : "Error completing day"}`
         }
         
-        // Log detalhado para debug
-        console.error("Error completing day - RPC Error:", {
-          error,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
+        // Log detalhado para debug - serializar corretamente
+        const errorInfo = {
+          message: error.message || null,
+          details: error.details || null,
+          hint: error.hint || null,
+          code: error.code || null,
           selectedDay,
           userId: user.id,
-        })
+        }
+        console.error("Error completing day - RPC Error:", JSON.stringify(errorInfo, null, 2))
         
-        throw new Error(errorMessage || (language === "pt" ? "Erro ao completar dia" : "Error completing day"))
-      }
-
-      // Verificar se já completou um dia hoje
-      if (data?.error === 'already_completed_today') {
-        toast.error(
-          language === "pt"
-            ? "Você já completou um dia hoje. O próximo dia será desbloqueado amanhã."
-            : "You already completed a day today. The next day will be unlocked tomorrow.",
-          {
-            duration: 5000,
-          }
-        )
+        // Se não houver mensagem específica, usar mensagem padrão
+        const finalErrorMessage = errorMessage || (language === "pt" 
+          ? "Erro ao completar dia. Por favor, tente novamente ou entre em contato com o suporte."
+          : "Error completing day. Please try again or contact support.")
+        
+        toast.error(finalErrorMessage)
         setIsCompleting(false)
         return
       }
 
-      // Verificar se a função retornou sucesso
-      if (!data?.success) {
-        const errorMsg = data?.message || data?.error || (language === "pt" ? "Erro ao completar dia" : "Error completing day")
-        console.error("Error completing day - Function returned error:", data)
-        toast.error(errorMsg)
+      // Verificar se a função retornou erro
+      if (!data?.success || data?.error) {
+        const errorType = data?.error
+        
+        // Tratar erros específicos da função SQL
+        let errorMessage = data?.message || (language === "pt" ? "Erro ao completar dia" : "Error completing day")
+        
+        switch (errorType) {
+          case 'already_completed_today':
+            errorMessage = language === "pt"
+              ? "Você já completou um dia hoje. O próximo dia será desbloqueado amanhã."
+              : "You already completed a day today. The next day will be unlocked tomorrow."
+            break
+          case 'day_not_found':
+            errorMessage = language === "pt"
+              ? "Dia não encontrado. Por favor, recarregue a página."
+              : "Day not found. Please reload the page."
+            break
+          case 'template_not_found':
+            errorMessage = language === "pt"
+              ? "Template não encontrado para este dia. Entre em contato com o suporte."
+              : "Template not found for this day. Please contact support."
+            break
+          case 'update_failed':
+            errorMessage = language === "pt"
+              ? "Falha ao atualizar o dia. Por favor, tente novamente."
+              : "Failed to update the day. Please try again."
+            break
+          case 'unexpected_error':
+            errorMessage = data?.message || (language === "pt"
+              ? "Erro inesperado ao completar dia. Por favor, tente novamente."
+              : "Unexpected error completing day. Please try again.")
+            break
+          default:
+            // Usar mensagem padrão ou a mensagem retornada pela função
+            if (!data?.message) {
+              errorMessage = language === "pt"
+                ? "Erro ao completar dia. Por favor, tente novamente."
+                : "Error completing day. Please try again."
+            }
+        }
+        
+        console.error("Error completing day - Function returned error:", JSON.stringify(data, null, 2))
+        toast.error(errorMessage, {
+          duration: 5000,
+        })
         setIsCompleting(false)
         return
       }
@@ -678,54 +861,53 @@ export default function ProgramPage() {
         }, 4000)
       }
     } catch (error: any) {
-      // Log detalhado para debug
-      console.error("Error completing day - Catch block:", {
-        error,
+      // Log detalhado para debug - serializar corretamente
+      const errorInfo: Record<string, any> = {
         errorType: typeof error,
-        errorConstructor: error?.constructor?.name,
-        message: error?.message,
-        details: error?.details,
-        hint: error?.hint,
-        code: error?.code,
-        stack: error?.stack,
+        errorConstructor: error?.constructor?.name || null,
         selectedDay,
-        stringified: JSON.stringify(error),
-      })
-      
-      // Melhorar extração da mensagem de erro
-      let errorMessage = error?.message
-      
-      // Tentar extrair de diferentes propriedades do erro do Supabase
-      if (!errorMessage) {
-        errorMessage = error?.details || error?.hint || error?.code
       }
       
-      // Se ainda não tiver mensagem, tentar toString
-      if (!errorMessage) {
-        const errorString = error?.toString()
-        // Verificar se toString não retorna apenas "[object Object]"
-        if (errorString && errorString !== "[object Object]") {
-          errorMessage = errorString
-        }
-      }
+      // Tentar extrair informações serializáveis do erro
+      if (error?.message) errorInfo.message = error.message
+      if (error?.details) errorInfo.details = error.details
+      if (error?.hint) errorInfo.hint = error.hint
+      if (error?.code) errorInfo.code = error.code
+      if (error?.stack) errorInfo.stack = error.stack
       
-      // Se ainda não tiver mensagem, tentar JSON.stringify (mas verificar se não é apenas "{}")
-      if (!errorMessage) {
+      // Se o erro for um objeto Supabase, extrair propriedades conhecidas
+      if (typeof error === 'object' && error !== null) {
         try {
-          const jsonError = JSON.stringify(error)
-          if (jsonError && jsonError !== "{}" && jsonError !== "null") {
-            errorMessage = jsonError
+          // Tentar serializar apenas propriedades conhecidas
+          const serializableError = {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
           }
+          errorInfo.serializedError = JSON.stringify(serializableError)
         } catch (e) {
           // Ignorar erro de serialização
         }
       }
       
+      console.error("Error completing day - Catch block:", JSON.stringify(errorInfo, null, 2))
+      
+      // Melhorar extração da mensagem de erro
+      let errorMessage = error?.message || error?.details || error?.hint
+      
+      // Se houver código de erro, adicionar contexto
+      if (error?.code && !errorMessage) {
+        errorMessage = language === "pt"
+          ? `Erro ${error.code}: Falha ao completar dia`
+          : `Error ${error.code}: Failed to complete day`
+      }
+      
       // Mensagem padrão se ainda não tiver nada
       if (!errorMessage || errorMessage === "{}" || errorMessage === "[object Object]") {
         errorMessage = language === "pt" 
-          ? "Erro desconhecido ao completar dia. Por favor, tente novamente ou entre em contato com o suporte."
-          : "Unknown error completing day. Please try again or contact support."
+          ? "Erro ao completar dia. Por favor, verifique sua conexão e tente novamente. Se o problema persistir, entre em contato com o suporte."
+          : "Error completing day. Please check your connection and try again. If the problem persists, contact support."
       }
       
       toast.error(errorMessage)
@@ -1220,6 +1402,11 @@ export default function ProgramPage() {
       {/* Success Dialog */}
       <Dialog open={showSuccess} onOpenChange={setShowSuccess}>
         <DialogContent className="max-w-md text-center">
+          <DialogHeader>
+            <DialogTitle className="sr-only">
+              {language === "pt" ? "Dia Completado!" : "Day Completed!"}
+            </DialogTitle>
+          </DialogHeader>
           <div className="space-y-6 py-6">
             <div className="flex justify-center">
               <div className="h-24 w-24 rounded-full bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center venser-glow animate-bounce">

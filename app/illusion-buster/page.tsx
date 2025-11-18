@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { MobileNav } from "@/components/mobile-nav"
@@ -11,28 +11,45 @@ import { translations } from "@/lib/translations"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { X, ArrowLeft, Lightbulb, AlertCircle, CheckCircle2, Sparkles, Eye, Brain, Trophy, Zap, Target, Flame, Star, Award, TrendingUp, Loader2 } from "lucide-react"
+import { X, ArrowLeft, Sparkles, Star, Zap, Trophy, TrendingUp, Award, Target, Flame, Crown, Loader2 } from "lucide-react"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
 import { useIllusionBusterProgress } from "@/lib/use-illusion-buster-progress"
-import { supabase } from "@/lib/supabase/client"
 
-interface Illusion {
+interface Monster {
   id: string
-  title: string
-  description: string
-  reality: string
-  category: string
-  xp: number
+  x: number
+  y: number
+  type: "normal" | "boss"
+  health: number
+  maxHealth: number
+  size: number
+  animationType: "float" | "walk" | "vibrate" | "static"
+  animationOffset: number
+  color: string
+  glowColor: string
+  isDying?: boolean
+  deathProgress?: number // 0 a 1 para animação de morte
+  deathStartY?: number // Posição Y inicial quando começou a morrer
 }
 
 interface Particle {
-  id: number
+  id: string
   x: number
   y: number
   vx: number
   vy: number
   color: string
+  life: number
+  size: number
+}
+
+interface FloatingText {
+  id: string
+  text: string
+  x: number
+  y: number
+  type: "xp" | "combo" | "message"
   life: number
 }
 
@@ -40,9 +57,197 @@ interface Badge {
   id: string
   title: string
   description: string
-  icon: React.ReactNode
-  color: string
+  level: number
 }
+
+// Mensagens de verdade
+const TRUTH_MESSAGES = {
+  common: [
+    "Substitua o tempo gasto com pornografia por atividades produtivas",
+    "Mantenha-se ocupado para reduzir tentações",
+    "Evite ficar sozinho em momentos que te levam ao vício",
+    "Identifique gatilhos e prepare estratégias",
+    "Mantenha dispositivos fora do quarto",
+    "Use seus dispositivos em locais comuns",
+    "Bloquear o acesso é um passo fundamental",
+    "Disciplina diária vence tentações momentâneas"
+  ],
+  medium: [
+    "Assuma responsabilidade e avise alguém de confiança",
+    "Peça ajuda para configurar senhas de bloqueio",
+    "Mudar o ambiente muda o comportamento",
+    "Um ambiente digital saudável fortalece sua resistência",
+    "Remova tentações para avançar",
+    "Use BlockSite, SPIN Safe Browser, Safe Surfer",
+    "Use Family Link, Screen Time e Qustodio",
+    "Extensões como StayFocusd e Cold Turkey ajudam a bloquear",
+    "Ferramentas existem para te apoiar"
+  ],
+  legendary: [
+    "Superar o vício começa ao assumir controle",
+    "Mudança é construída diariamente com disciplina",
+    "Seu ambiente pode ser mais forte que suas tentações",
+    "Determinação e disciplina constroem sua liberdade",
+    "Cada escolha consciente fortalece sua mente",
+    "Você evolui quando protege sua mente e seu ambiente"
+  ],
+  motivational: [
+    "Proteger seus dispositivos é proteger sua mente",
+    "Bloqueadores são ferramentas de controle pessoal",
+    "Ambiente controlado = mentalidade forte",
+    "Quanto mais difícil acessar pornografia, mais fácil superá-la",
+    "Pequenas mudanças geram grandes transformações",
+    "A jornada começa quando você bloqueia o que te destrói"
+  ]
+}
+
+// Badges por nível
+const LEVEL_BADGES: Badge[] = [
+  { id: "level-3", title: "Iniciante", description: "Nível 3 alcançado!", level: 3 },
+  { id: "level-5", title: "Caçador de Ilusões", description: "Nível 5 alcançado!", level: 5 },
+  { id: "level-10", title: "Libertador", description: "Nível 10 alcançado!", level: 10 },
+  { id: "level-20", title: "Iluminado", description: "Nível 20 alcançado!", level: 20 }
+]
+
+// Sistema de combo progressivo: 1, 2, 3, 5, 10, 15, 20, 30, 50...
+const getComboMultiplier = (combo: number): number => {
+  if (combo <= 1) return 1
+  if (combo <= 2) return 2
+  if (combo <= 3) return 3
+  if (combo <= 5) return 5
+  if (combo <= 10) return 10
+  if (combo <= 15) return 15
+  if (combo <= 20) return 20
+  if (combo <= 30) return 30
+  if (combo <= 50) return 50
+  return 100
+}
+
+// Selecionar mensagem baseada em probabilidade
+const getRandomMessage = (): string => {
+  const rand = Math.random()
+  
+  // Lendárias: 5% de chance
+  if (rand < 0.05) {
+    return TRUTH_MESSAGES.legendary[Math.floor(Math.random() * TRUTH_MESSAGES.legendary.length)]
+  }
+  
+  // Motivacionais: 15% de chance
+  if (rand < 0.20) {
+    return TRUTH_MESSAGES.motivational[Math.floor(Math.random() * TRUTH_MESSAGES.motivational.length)]
+  }
+  
+  // Médias: 30% de chance
+  if (rand < 0.50) {
+    return TRUTH_MESSAGES.medium[Math.floor(Math.random() * TRUTH_MESSAGES.medium.length)]
+  }
+  
+  // Comuns: 50% de chance
+  return TRUTH_MESSAGES.common[Math.floor(Math.random() * TRUTH_MESSAGES.common.length)]
+}
+
+const MIN_MONSTERS = 6
+const MAX_MONSTERS = 8 // Reduzido de 12 para melhor performance
+const BOSS_SPAWN_CHANCE = 0.15 // 15% de chance de spawnar um boss
+const XP_PER_MONSTER = 10
+const XP_PER_BOSS = 50
+const XP_PER_LEVEL = 100
+const MAX_PARTICLES = 30 // Reduzido de 100 para melhor performance
+const MAX_FLOATING_TEXTS = 8 // Reduzido de 20 para melhor performance
+const YELLOW_SPAWN_CHANCE = 0.05 // 5% de chance de spawnar um monstro amarelo (raro)
+const YELLOW_MONSTERS_FOR_LEGENDARY = 5 // Quantos monstros amarelos para ganhar mensagem lendária
+const DEATH_ANIMATION_DURATION = 2000 // 2 segundos para animação de morte (tempo para subir e sair do card)
+const MONSTER_HEALTH_NORMAL = 2 // Vida padrão para monstros normais
+const MONSTER_HEALTH_BOSS = 3 // Vida para bosses
+
+// Cores disponíveis (sem amarelo, que será especial)
+const NORMAL_COLORS = ["#ec4899", "#8b5cf6", "#3b82f6", "#10b981", "#ef4444"]
+const YELLOW_COLOR = "#f59e0b"
+
+// Função de comparação customizada para memo (otimização)
+const areMonstersEqual = (prevProps: { monster: Monster; onClick: (monster: Monster, e: React.MouseEvent | React.TouchEvent) => void; cardHeight: number }, nextProps: { monster: Monster; onClick: (monster: Monster, e: React.MouseEvent | React.TouchEvent) => void; cardHeight: number }) => {
+  const prev = prevProps.monster
+  const next = nextProps.monster
+  
+  // Comparar apenas propriedades que afetam a renderização visual
+  return (
+    prev.id === next.id &&
+    prev.x === next.x &&
+    prev.y === next.y &&
+    prev.size === next.size &&
+    prev.color === next.color &&
+    prev.health === next.health &&
+    prev.maxHealth === next.maxHealth &&
+    prev.isDying === next.isDying &&
+    Math.abs((prev.deathProgress || 0) - (next.deathProgress || 0)) < 0.01 && // Tolerância para valores float
+    prev.type === next.type
+  )
+}
+
+// Componente de monstro memoizado para evitar re-renders desnecessários
+const MonsterComponent = memo(({ monster, onClick, cardHeight }: { monster: Monster; onClick: (monster: Monster, e: React.MouseEvent | React.TouchEvent) => void; cardHeight: number }) => {
+  const deathProgress = monster.deathProgress || 0
+  const isDying = monster.isDying || false
+  
+  // Calcular distância necessária para sair do card (cacheado)
+  // O monstro precisa subir até passar completamente da borda superior
+  const deathStartY = monster.deathStartY || monster.y
+  const halfSize = monster.size * 0.5 // Cache de cálculo
+  const distanceToTop = deathStartY + halfSize // Distância até a borda superior
+  const totalDistance = distanceToTop + monster.size // Distância total para sair completamente
+  
+  return (
+    <div
+      onClick={(e) => !isDying && onClick(monster, e)}
+      onTouchStart={(e) => !isDying && onClick(monster, e)}
+      className={cn(
+        "absolute", // Removido transition-all para melhor performance
+        isDying ? "pointer-events-none" : "cursor-pointer",
+        monster.type === "boss" ? "monster-boss" : "monster-normal"
+      )}
+      style={{
+        left: `${monster.x}px`,
+        top: `${monster.y}px`,
+        transform: isDying 
+          ? `translate3d(-50%, calc(-50% - ${deathProgress * totalDistance}px), 0) scale(${1 - deathProgress * 0.5})`
+          : "translate3d(-50%, -50%, 0)",
+        width: `${monster.size}px`,
+        height: `${monster.size}px`,
+        filter: isDying 
+          ? `drop-shadow(0 0 ${monster.size / 4 * (1 - deathProgress)}px ${monster.glowColor})`
+          : `drop-shadow(0 0 ${monster.size / 4}px ${monster.glowColor})`,
+        opacity: isDying ? Math.max(0, 1 - deathProgress * 1.2) : 1,
+        zIndex: isDying ? 100 : 1,
+        willChange: isDying ? "transform, opacity" : "transform",
+        transformOrigin: "center center"
+      }}
+    >
+      <div
+        className="w-full h-full rounded-full relative"
+        style={{
+          backgroundColor: monster.color,
+          boxShadow: `0 0 ${monster.size / 2}px ${monster.glowColor}, inset 0 0 ${monster.size / 4}px rgba(255,255,255,0.3)`
+        }}
+      >
+        <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-white rounded-full" />
+        <div className="absolute top-1/4 right-1/4 w-2 h-2 bg-white rounded-full" />
+        {monster.type === "boss" && (
+          <Crown className="absolute -top-2 left-1/2 transform -translate-x-1/2 h-4 w-4 text-yellow-300" />
+        )}
+        {/* Barra de vida para todos os monstros */}
+        {monster.health < monster.maxHealth && (
+          <div className="absolute -bottom-4 left-0 right-0 h-1 bg-red-500/30 rounded">
+            <div
+              className="h-full bg-red-500 rounded transition-all"
+              style={{ width: `${(monster.health / monster.maxHealth) * 100}%` }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}, areMonstersEqual)
+MonsterComponent.displayName = "MonsterComponent"
 
 export default function IllusionBusterPage() {
   const { language } = useLanguage()
@@ -51,487 +256,740 @@ export default function IllusionBusterPage() {
   const router = useRouter()
   const { progress, updateProgress, isLoading: isLoadingProgress } = useIllusionBusterProgress()
   
-  const [selectedIllusion, setSelectedIllusion] = useState<Illusion | null>(null)
-  const [viewedIllusions, setViewedIllusions] = useState<Set<string>>(new Set())
-  const [shownBadges, setShownBadges] = useState<Set<string>>(new Set())
-  const [isDestroying, setIsDestroying] = useState(false)
+  const gameAreaRef = useRef<HTMLDivElement>(null)
+  const animationFrameRef = useRef<number>()
+  const comboTimeoutRef = useRef<NodeJS.Timeout>()
+  const saveTimeoutRef = useRef<NodeJS.Timeout>()
+  
+  // Refs para valores que não precisam causar re-render
+  const monstersRef = useRef<Monster[]>([])
+  const particlesRef = useRef<Particle[]>([])
+  const floatingTextsRef = useRef<FloatingText[]>([])
+  const animationTimeRef = useRef<number>(0)
+  const lastSaveTimeRef = useRef<number>(0)
+  const pendingSaveRef = useRef<any>(null)
+  const isVisibleRef = useRef<boolean>(true) // Para pausar quando não visível
+  const isPausedRef = useRef<boolean>(false) // Controle de pausa
+  
+  const [monsters, setMonsters] = useState<Monster[]>([])
   const [particles, setParticles] = useState<Particle[]>([])
-  const [showBadge, setShowBadge] = useState<Badge | null>(null)
+  const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([])
   const [xp, setXp] = useState(0)
   const [level, setLevel] = useState(1)
   const [combo, setCombo] = useState(0)
-  const [showXpGain, setShowXpGain] = useState<{ value: number; x: number; y: number } | null>(null)
-  const [streak, setStreak] = useState(0)
-  const [isExploding, setIsExploding] = useState(false)
-  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
-  const animationFrameRef = useRef<number>()
-  const previousModalOpen = useRef(false)
-  const hasLoadedFromDb = useRef(false)
+  const [totalKills, setTotalKills] = useState(0)
+  const [showBadge, setShowBadge] = useState<Badge | null>(null)
+  const [showMessage, setShowMessage] = useState<string | null>(null)
+  const [gameAreaSize, setGameAreaSize] = useState({ width: 0, height: 0 })
+  const [hasLoadedFromDb, setHasLoadedFromDb] = useState(false)
+  const [confettiParticles, setConfettiParticles] = useState<Array<{ id: string; x: number; y: number; color: string; delay: number; xOffset: number }>>([])
+  
+  // Sistema de pontuação por cor (gerado aleatoriamente a cada sessão)
+  const [colorXpMap, setColorXpMap] = useState<Record<string, number>>(() => {
+    // Gerar pontuações aleatórias para cada cor (entre 5 e 25 XP)
+    const map: Record<string, number> = {}
+    NORMAL_COLORS.forEach(color => {
+      map[color] = Math.floor(Math.random() * 21) + 5 // 5-25 XP
+    })
+    // Amarelo sempre dá mais XP (raro)
+    map[YELLOW_COLOR] = Math.floor(Math.random() * 21) + 30 // 30-50 XP
+    return map
+  })
+  
+  // Rastrear monstros amarelos mortos
+  const [yellowKills, setYellowKills] = useState(0)
 
-  const XP_PER_LEVEL = 100
-  const XP_PER_ILLUSION = 50
-  const COMBO_MULTIPLIER = 1.5
-
-  const [illusions, setIllusions] = useState<Illusion[]>([])
-  const [isLoadingIllusions, setIsLoadingIllusions] = useState(true)
-
-  // Carregar ilusões do banco de dados
+  // Carregar dados do banco
   useEffect(() => {
-    loadIllusions()
-  }, [language])
-
-  const loadIllusions = async () => {
-    try {
-      setIsLoadingIllusions(true)
-      const { data, error } = await supabase
-        .from("illusions")
-        .select("*")
-        .eq("is_active", true)
-        .order("display_order", { ascending: true })
-
-      if (error) throw error
-
-      if (data && data.length > 0) {
-        // Converter dados do banco para o formato da interface Illusion
-        const formattedIllusions: Illusion[] = data.map((item) => ({
-          id: item.id,
-          title: language === "pt" ? item.title_pt : language === "es" ? item.title_es : item.title_en,
-          description: language === "pt" ? item.description_pt : language === "es" ? item.description_es : item.description_en,
-          reality: language === "pt" ? item.reality_pt : language === "es" ? item.reality_es : item.reality_en,
-          category: language === "pt" ? item.category_pt : language === "es" ? item.category_es : item.category_en,
-          xp: item.xp_reward || XP_PER_ILLUSION
-        }))
-        setIllusions(formattedIllusions)
-      } else {
-        // Fallback para ilusões padrão se não houver no banco
-        const defaultIllusions: Illusion[] = [
-    {
-      id: "1",
-      title: language === "pt" ? "Vou usar apenas uma vez" : language === "es" ? "Lo usaré solo una vez" : "I'll just use it once",
-      description: language === "pt" 
-        ? "Acreditar que você pode controlar o uso e parar quando quiser"
-        : language === "es"
-        ? "Creer que puedes controlar el uso y parar cuando quieras"
-        : "Believing you can control usage and stop whenever you want",
-      reality: language === "pt"
-        ? "O vício funciona através do sistema de recompensa do cérebro. Cada uso reforça o comportamento, tornando mais difícil resistir na próxima vez. O 'apenas uma vez' é uma armadilha mental que o vício usa para te manter preso. A pornografia é projetada para ser viciante - cada visualização aumenta o desejo pela próxima."
-        : language === "es"
-        ? "La adicción funciona a través del sistema de recompensa del cerebro. Cada uso refuerza el comportamiento, haciendo más difícil resistir la próxima vez. El 'solo una vez' es una trampa mental que la adicción usa para mantenerte atrapado. La pornografía está diseñada para ser adictiva - cada visualización aumenta el deseo por la siguiente."
-        : "Addiction works through the brain's reward system. Each use reinforces the behavior, making it harder to resist next time. 'Just once' is a mental trap that addiction uses to keep you trapped. Pornography is designed to be addictive - each viewing increases the desire for the next.",
-      category: language === "pt" ? "Controle" : language === "es" ? "Control" : "Control",
-      xp: XP_PER_ILLUSION
-    },
-    {
-      id: "2",
-      title: language === "pt" ? "Isso me ajuda a relaxar" : language === "es" ? "Esto me ayuda a relajarme" : "This helps me relax",
-      description: language === "pt"
-        ? "Pensar que o comportamento problemático é uma solução para o estresse"
-        : language === "es"
-        ? "Pensar que el comportamiento problemático es una solución para el estrés"
-        : "Thinking the problematic behavior is a solution for stress",
-      reality: language === "pt"
-        ? "O alívio é temporário e ilusório. O que você sente é uma fuga momentânea, mas o estresse e a ansiedade retornam ainda mais fortes. A pornografia cria um ciclo vicioso: você usa para escapar do estresse, mas isso aumenta a ansiedade e a depressão, criando mais necessidade de usar novamente. O verdadeiro relaxamento vem de técnicas saudáveis como meditação, exercícios e conexões genuínas."
-        : language === "es"
-        ? "El alivio es temporal e ilusorio. Lo que sientes es un escape momentáneo, pero el estrés y la ansiedad regresan aún más fuertes. La pornografía crea un círculo vicioso: la usas para escapar del estrés, pero esto aumenta la ansiedad y la depresión, creando más necesidad de usarla nuevamente. El verdadero relax viene de técnicas saludables como meditación, ejercicios y conexiones genuinas."
-        : "The relief is temporary and illusory. What you feel is a momentary escape, but stress and anxiety return even stronger. Pornography creates a vicious cycle: you use it to escape stress, but this increases anxiety and depression, creating more need to use again. True relaxation comes from healthy techniques like meditation, exercise, and genuine connections.",
-      category: language === "pt" ? "Bem-estar" : language === "es" ? "Bienestar" : "Wellbeing",
-      xp: XP_PER_ILLUSION
-    },
-    {
-      id: "3",
-      title: language === "pt" ? "Não é tão ruim assim" : language === "es" ? "No es tan malo" : "It's not that bad",
-      description: language === "pt"
-        ? "Minimizar as consequências negativas do comportamento"
-        : language === "es"
-        ? "Minimizar las consecuencias negativas del comportamiento"
-        : "Minimizing the negative consequences of the behavior",
-      reality: language === "pt"
-        ? "Seu cérebro está distorcendo a realidade para proteger o vício. As consequências são reais: perda de tempo, energia, relacionamentos, saúde mental e física. A pornografia afeta sua visão de relacionamentos reais, sua capacidade de intimidade, sua autoestima e sua energia. Reconhecer o impacto real é o primeiro passo para a mudança."
-        : language === "es"
-        ? "Tu cerebro está distorsionando la realidad para proteger la adicción. Las consecuencias son reales: pérdida de tiempo, energía, relaciones, salud mental y física. La pornografía afecta tu visión de relaciones reales, tu capacidad de intimidad, tu autoestima y tu energía. Reconocer el impacto real es el primer paso para el cambio."
-        : "Your brain is distorting reality to protect the addiction. The consequences are real: loss of time, energy, relationships, mental and physical health. Pornography affects your view of real relationships, your capacity for intimacy, your self-esteem, and your energy. Recognizing the real impact is the first step to change.",
-      category: language === "pt" ? "Realidade" : language === "es" ? "Realidad" : "Reality",
-      xp: XP_PER_ILLUSION
-    },
-    {
-      id: "4",
-      title: language === "pt" ? "Preciso disso para funcionar" : language === "es" ? "Necesito esto para funcionar" : "I need this to function",
-      description: language === "pt"
-        ? "Acreditar que o comportamento é necessário para seu desempenho diário"
-        : language === "es"
-        ? "Creer que el comportamiento es necesario para tu desempeño diario"
-        : "Believing the behavior is necessary for your daily performance",
-      reality: language === "pt"
-        ? "Isso é dependência, não necessidade. Seu cérebro adaptou-se ao comportamento, mas você pode recondicioná-lo. A pornografia não melhora seu desempenho - na verdade, ela drena sua energia, reduz sua motivação e afeta sua capacidade de foco. Com tempo e técnicas adequadas, você descobrirá que pode funcionar melhor sem isso, com mais clareza e energia genuína."
-        : language === "es"
-        ? "Eso es dependencia, no necesidad. Tu cerebro se ha adaptado al comportamiento, pero puedes recondicionarlo. La pornografía no mejora tu desempeño - de hecho, drena tu energía, reduce tu motivación y afecta tu capacidad de enfoque. Con tiempo y técnicas adecuadas, descubrirás que puedes funcionar mejor sin eso, con más claridad y energía genuina."
-        : "That's dependence, not need. Your brain has adapted to the behavior, but you can recondition it. Pornography doesn't improve your performance - in fact, it drains your energy, reduces your motivation, and affects your ability to focus. With time and proper techniques, you'll discover you can function better without it, with more clarity and genuine energy.",
-      category: language === "pt" ? "Dependência" : language === "es" ? "Dependencia" : "Dependence",
-      xp: XP_PER_ILLUSION
-    },
-    {
-      id: "5",
-      title: language === "pt" ? "Todos fazem isso" : language === "es" ? "Todos lo hacen" : "Everyone does this",
-      description: language === "pt"
-        ? "Usar a normalização social como justificativa"
-        : language === "es"
-        ? "Usar la normalización social como justificación"
-        : "Using social normalization as justification",
-      reality: language === "pt"
-        ? "Nem todos fazem, e mesmo que fizessem, isso não torna o comportamento saudável para você. Muitas pessoas estão lutando contra esse vício em silêncio. Você está aqui porque reconheceu que isso está afetando sua vida negativamente. Foque no que é melhor para você, não nos outros. Sua jornada de recuperação é única e válida."
-        : language === "es"
-        ? "No todos lo hacen, y aunque lo hicieran, eso no hace el comportamiento saludable para ti. Muchas personas están luchando contra esta adicción en silencio. Estás aquí porque reconociste que esto está afectando tu vida negativamente. Enfócate en lo que es mejor para ti, no en los demás. Tu viaje de recuperación es único y válido."
-        : "Not everyone does, and even if they did, that doesn't make the behavior healthy for you. Many people are struggling with this addiction in silence. You're here because you recognized this is negatively affecting your life. Focus on what's best for you, not others. Your recovery journey is unique and valid.",
-      category: language === "pt" ? "Social" : language === "es" ? "Social" : "Social",
-      xp: XP_PER_ILLUSION
-    },
-    {
-      id: "6",
-      title: language === "pt" ? "Não consigo parar, é muito difícil" : language === "es" ? "No puedo parar, es muy difícil" : "I can't stop, it's too hard",
-      description: language === "pt"
-        ? "Acreditar que mudar é impossível ou muito difícil"
-        : language === "es"
-        ? "Creer que cambiar es imposible o muy difícil"
-        : "Believing change is impossible or too difficult",
-      reality: language === "pt"
-        ? "Mudar é desafiador, mas não impossível. Milhões de pessoas conseguiram. Você já deu o primeiro passo ao reconhecer o problema. Com suporte, técnicas adequadas e determinação, você pode superar isso. A recuperação não é linear - haverá altos e baixos, mas cada dia sem o vício é uma vitória. Um dia de cada vez, você pode vencer."
-        : language === "es"
-        ? "Cambiar es desafiante, pero no imposible. Millones de personas lo lograron. Ya diste el primer paso al reconocer el problema. Con apoyo, técnicas adecuadas y determinación, puedes superarlo. La recuperación no es lineal - habrá altibajos, pero cada día sin la adicción es una victoria. Un día a la vez, puedes vencer."
-        : "Change is challenging but not impossible. Millions of people have succeeded. You've already taken the first step by recognizing the problem. With support, proper techniques, and determination, you can overcome this. Recovery is not linear - there will be ups and downs, but each day without the addiction is a victory. One day at a time, you can win.",
-      category: language === "pt" ? "Mudança" : language === "es" ? "Cambio" : "Change",
-      xp: XP_PER_ILLUSION
-    }
-        ]
-        setIllusions(defaultIllusions)
+    if (!isLoadingProgress && !hasLoadedFromDb) {
+      if (progress) {
+        setXp(progress.illusion_buster_xp)
+        setLevel(progress.illusion_buster_level)
+        setCombo(progress.current_combo)
+        setTotalKills(progress.destroyed_illusions?.length || 0)
+        // Carregar kills de monstros amarelos se existir
+        const savedYellowKills = (progress as any).yellow_monster_kills || 0
+        setYellowKills(savedYellowKills)
       }
-    } catch (error) {
-      console.error("Error loading illusions:", error)
-      // Em caso de erro, deixar array vazio ou usar fallback
-      setIllusions([])
-    } finally {
-      setIsLoadingIllusions(false)
+      // Marcar como carregado mesmo se não houver progresso
+      setHasLoadedFromDb(true)
     }
-  }
+  }, [isLoadingProgress, progress, hasLoadedFromDb])
 
-  const badges: Badge[] = useMemo(() => [
-    {
-      id: "first",
-      title: language === "pt" ? "Primeiro Passo" : language === "es" ? "Primer Paso" : "First Step",
-      description: language === "pt" ? "Destruiu sua primeira ilusão!" : language === "es" ? "¡Destruiste tu primera ilusión!" : "Destroyed your first illusion!",
-      icon: <Star className="h-8 w-8" />,
-      color: "from-yellow-500 to-orange-500"
-    },
-    {
-      id: "halfway",
-      title: language === "pt" ? "Meio Caminho" : language === "es" ? "A Mitad del Camino" : "Halfway There",
-      description: language === "pt" ? "Destruiu 3 ilusões!" : language === "es" ? "¡Destruiste 3 ilusiones!" : "Destroyed 3 illusions!",
-      icon: <Target className="h-8 w-8" />,
-      color: "from-blue-500 to-cyan-500"
-    },
-    {
-      id: "master",
-      title: language === "pt" ? "Mestre da Consciência" : language === "es" ? "Maestro de la Conciencia" : "Master of Awareness",
-      description: language === "pt" ? "Destruiu todas as ilusões!" : language === "es" ? "¡Destruiste todas las ilusiones!" : "Destroyed all illusions!",
-      icon: <Trophy className="h-8 w-8" />,
-      color: "from-purple-500 to-pink-500"
-    },
-    {
-      id: "combo3",
-      title: language === "pt" ? "Combo Triplo" : language === "es" ? "Combo Triple" : "Triple Combo",
-      description: language === "pt" ? "Destruiu 3 ilusões em sequência!" : language === "es" ? "¡Destruiste 3 ilusiones seguidas!" : "Destroyed 3 illusions in a row!",
-      icon: <Zap className="h-8 w-8" />,
-      color: "from-yellow-400 to-orange-500"
-    },
-    {
-      id: "streak5",
-      title: language === "pt" ? "Raio de Consciência" : language === "es" ? "Rayo de Conciencia" : "Awareness Bolt",
-      description: language === "pt" ? "5 ilusões destruídas!" : language === "es" ? "¡5 ilusiones destruidas!" : "5 illusions destroyed!",
-      icon: <Flame className="h-8 w-8" />,
-      color: "from-red-500 to-orange-500"
-    }
-  ], [language])
-
-  // Carregar dados do banco quando o progresso for carregado
+  // Atualizar tamanho da área de jogo
   useEffect(() => {
-    if (!isLoadingProgress && progress && !hasLoadedFromDb.current) {
-      setXp(progress.illusion_buster_xp)
-      setLevel(progress.illusion_buster_level)
-      setCombo(progress.current_combo)
-      setStreak(progress.illusion_buster_streak)
-      setViewedIllusions(new Set(progress.destroyed_illusions))
-      setShownBadges(new Set(progress.earned_badges))
-      hasLoadedFromDb.current = true
+    const updateSize = () => {
+      if (gameAreaRef.current) {
+        const rect = gameAreaRef.current.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          setGameAreaSize({ width: rect.width, height: rect.height })
+        }
+      }
     }
-  }, [isLoadingProgress, progress])
+    
+    // Tentar atualizar imediatamente
+    updateSize()
+    
+    // Se não conseguir, tentar novamente após um pequeno delay
+    const timeoutId = setTimeout(() => {
+      updateSize()
+    }, 100)
+    
+    window.addEventListener("resize", updateSize)
+    
+    return () => {
+      clearTimeout(timeoutId)
+      window.removeEventListener("resize", updateSize)
+    }
+  }, [])
 
-  // Salvar progresso no banco quando houver mudanças
+  // Criar monstro
+  const createMonster = useCallback((isBoss: boolean = false): Monster => {
+    const types: ("float" | "walk" | "vibrate" | "static")[] = ["float", "walk", "vibrate", "static"]
+    const animationType = types[Math.floor(Math.random() * types.length)]
+    
+    // Obter tamanho atual da área (com fallback)
+    let width = gameAreaSize.width
+    let height = gameAreaSize.height
+    
+    if (width === 0 || height === 0) {
+      if (gameAreaRef.current) {
+        const rect = gameAreaRef.current.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          width = rect.width
+          height = rect.height
+        } else {
+          width = 800
+          height = 500
+        }
+      } else {
+        width = 800
+        height = 500
+      }
+    }
+    
+    if (isBoss) {
+      return {
+        id: `boss-${Date.now()}-${Math.random()}`,
+        x: Math.random() * Math.max(100, width - 100) + 50,
+        y: Math.random() * Math.max(100, height - 100) + 50,
+        type: "boss",
+        health: MONSTER_HEALTH_BOSS,
+        maxHealth: MONSTER_HEALTH_BOSS,
+        size: 80,
+        animationType,
+        animationOffset: Math.random() * Math.PI * 2,
+        color: "#f59e0b",
+        glowColor: "#fbbf24",
+        isDying: false,
+        deathProgress: 0
+      }
+    }
+    
+    // Decidir se é amarelo (raro) ou cor normal
+    const isYellow = Math.random() < YELLOW_SPAWN_CHANCE
+    const color = isYellow ? YELLOW_COLOR : NORMAL_COLORS[Math.floor(Math.random() * NORMAL_COLORS.length)]
+    
+    const glowColors: Record<string, string> = {
+      "#ec4899": "#f472b6",
+      "#8b5cf6": "#a78bfa",
+      "#3b82f6": "#60a5fa",
+      "#10b981": "#34d399",
+      "#f59e0b": "#fbbf24",
+      "#ef4444": "#f87171"
+    }
+    
+    return {
+      id: `monster-${Date.now()}-${Math.random()}`,
+      x: Math.random() * Math.max(60, width - 60) + 30,
+      y: Math.random() * Math.max(60, height - 60) + 30,
+      type: "normal",
+      health: MONSTER_HEALTH_NORMAL,
+      maxHealth: MONSTER_HEALTH_NORMAL,
+      size: 40 + Math.random() * 20,
+      animationType,
+      animationOffset: Math.random() * Math.PI * 2,
+      color,
+      glowColor: glowColors[color] || color,
+      isDying: false,
+      deathProgress: 0
+    }
+  }, [gameAreaSize])
+
+  // Inicializar monstros
   useEffect(() => {
-    if (!hasLoadedFromDb.current) return // Não salvar durante o carregamento inicial
-
-    const saveProgress = async () => {
-      await updateProgress({
-        xp,
-        level,
-        destroyedIllusions: Array.from(viewedIllusions),
-        earnedBadges: Array.from(shownBadges),
-        combo,
-        streak
-      })
-    }
-
-    // Debounce para não salvar a cada mudança
-    const timer = setTimeout(() => {
-      saveProgress()
-    }, 1000) // Salva após 1 segundo de inatividade
-
-    return () => clearTimeout(timer)
-  }, [xp, level, viewedIllusions, shownBadges, combo, streak, updateProgress])
-
-  // Calculate current level XP
-  const currentLevelXp = xp % XP_PER_LEVEL
-  const progressPercentage = (currentLevelXp / XP_PER_LEVEL) * 100
-
-  // Create particles for explosion effect
-  const createParticles = (x: number, y: number, color: string) => {
-    const newParticles: Particle[] = []
-    for (let i = 0; i < 20; i++) {
-      newParticles.push({
-        id: Math.random(),
-        x,
-        y,
-        vx: (Math.random() - 0.5) * 10,
-        vy: (Math.random() - 0.5) * 10,
-        color,
-        life: 1
-      })
-    }
-    setParticles(prev => [...prev, ...newParticles])
-  }
-
-  // Animate particles
-  useEffect(() => {
-    if (particles.length === 0) return
-
-    let animationId: number
-
-    const animate = () => {
-      setParticles(prev => {
-        const updated = prev
-          .map(p => ({
-            ...p,
-            x: p.x + p.vx * 0.5,
-            y: p.y + p.vy * 0.5,
-            vy: p.vy + 0.3, // gravity
-            life: p.life - 0.02
-          }))
-          .filter(p => p.life > 0)
+    // Se já tem monstros, não reinicializar
+    if (monsters.length > 0) return
+    
+    // Aguardar até que as condições sejam satisfeitas
+    if (hasLoadedFromDb) {
+      // Se gameAreaSize ainda não foi calculado, usar valores padrão ou tentar calcular novamente
+      let width = gameAreaSize.width
+      let height = gameAreaSize.height
+      
+      if (width === 0 || height === 0) {
+        if (gameAreaRef.current) {
+          const rect = gameAreaRef.current.getBoundingClientRect()
+          if (rect.width > 0 && rect.height > 0) {
+            width = rect.width
+            height = rect.height
+            setGameAreaSize({ width, height })
+          } else {
+            // Usar valores padrão se ainda não conseguir calcular
+            width = 800
+            height = 500
+          }
+        } else {
+          // Usar valores padrão se ref ainda não estiver disponível
+          width = 800
+          height = 500
+        }
+      }
+      
+      if (width > 0 && height > 0) {
+        const initialCount = Math.floor(Math.random() * (MAX_MONSTERS - MIN_MONSTERS + 1)) + MIN_MONSTERS
+        const initialMonsters: Monster[] = []
         
-        if (updated.length > 0) {
-          animationId = requestAnimationFrame(animate)
+        // Criar monstros com tamanho atual ou padrão
+        const tempGameAreaSize = { width, height }
+        for (let i = 0; i < initialCount; i++) {
+          const isBoss = Math.random() < BOSS_SPAWN_CHANCE && i === 0
+          const types: ("float" | "walk" | "vibrate" | "static")[] = ["float", "walk", "vibrate", "static"]
+          const animationType = types[Math.floor(Math.random() * types.length)]
+          
+          if (isBoss) {
+            initialMonsters.push({
+              id: `boss-${Date.now()}-${Math.random()}`,
+              x: Math.random() * (tempGameAreaSize.width - 100) + 50,
+              y: Math.random() * (tempGameAreaSize.height - 100) + 50,
+              type: "boss",
+              health: MONSTER_HEALTH_BOSS,
+              maxHealth: MONSTER_HEALTH_BOSS,
+              size: 80,
+              animationType,
+              animationOffset: Math.random() * Math.PI * 2,
+              color: "#f59e0b",
+              glowColor: "#fbbf24",
+              isDying: false,
+              deathProgress: 0
+            })
+          } else {
+            // Decidir se é amarelo (raro) ou cor normal
+            const isYellow = Math.random() < YELLOW_SPAWN_CHANCE
+            const color = isYellow ? YELLOW_COLOR : NORMAL_COLORS[Math.floor(Math.random() * NORMAL_COLORS.length)]
+            const glowColors: Record<string, string> = {
+              "#ec4899": "#f472b6",
+              "#8b5cf6": "#a78bfa",
+              "#3b82f6": "#60a5fa",
+              "#10b981": "#34d399",
+              "#f59e0b": "#fbbf24",
+              "#ef4444": "#f87171"
+            }
+            
+            initialMonsters.push({
+              id: `monster-${Date.now()}-${Math.random()}`,
+              x: Math.random() * (tempGameAreaSize.width - 60) + 30,
+              y: Math.random() * (tempGameAreaSize.height - 60) + 30,
+              type: "normal",
+              health: MONSTER_HEALTH_NORMAL,
+              maxHealth: MONSTER_HEALTH_NORMAL,
+              size: 40 + Math.random() * 20,
+              animationType,
+              animationOffset: Math.random() * Math.PI * 2,
+              color,
+              glowColor: glowColors[color] || color,
+              isDying: false,
+              deathProgress: 0
+            })
+          }
         }
         
-        return updated
+        setMonsters(initialMonsters)
+        monstersRef.current = initialMonsters
+      }
+    }
+  }, [gameAreaSize, hasLoadedFromDb, monsters.length])
+
+  // Sincronizar refs com estado quando mudam
+  useEffect(() => {
+    monstersRef.current = monsters
+  }, [monsters])
+
+  useEffect(() => {
+    particlesRef.current = particles
+  }, [particles])
+
+  useEffect(() => {
+    floatingTextsRef.current = floatingTexts
+  }, [floatingTexts])
+
+  // Pausar animações quando a página não está visível (Intersection Observer)
+  useEffect(() => {
+    if (!gameAreaRef.current) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          isVisibleRef.current = entry.isIntersecting
+          isPausedRef.current = !entry.isIntersecting
+        })
+      },
+      { threshold: 0.1 }
+    )
+
+    observer.observe(gameAreaRef.current)
+
+    // Também pausar quando a aba não está visível
+    const handleVisibilityChange = () => {
+      isVisibleRef.current = !document.hidden
+      isPausedRef.current = document.hidden
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      observer.disconnect()
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [])
+
+  // Consolidar todas as animações em um único loop otimizado
+  useEffect(() => {
+    if (monstersRef.current.length === 0 && particlesRef.current.length === 0 && floatingTextsRef.current.length === 0) return
+    if (isPausedRef.current) return // Pausar se não estiver visível
+
+    let animationId: number
+    let frameCount = 0
+
+    const animate = (currentTime: number) => {
+      // Pausar se não estiver visível
+      if (isPausedRef.current || !isVisibleRef.current) {
+        animationId = requestAnimationFrame(animate)
+        return
+      }
+
+      animationTimeRef.current = currentTime * 0.001
+      frameCount++
+
+      // Animar monstros usando refs (evita re-renders)
+      // Cache de valores para evitar recálculos
+      const time = animationTimeRef.current
+      const width = gameAreaSize.width
+      const height = gameAreaSize.height
+      
+      // Processar monstros apenas a cada 2 frames quando não estão morrendo (30fps)
+      const shouldUpdateMonsters = frameCount % 2 === 0
+      
+      const updatedMonsters = monstersRef.current.map(monster => {
+        // Se está morrendo, sempre animar morte (prioridade)
+        if (monster.isDying) {
+          const currentProgress = monster.deathProgress || 0
+          // Usar incremento fixo mais eficiente
+          const increment = 0.00835 // ~16.7ms / 2000ms por frame
+          const newDeathProgress = Math.min(1, currentProgress + increment)
+          return { ...monster, deathProgress: newDeathProgress }
+        }
+        
+        // Se não está morrendo e não é hora de atualizar, retornar sem mudanças
+        if (!shouldUpdateMonsters) {
+          return monster
+        }
+        
+        // Cache de valores de animação
+        let newX = monster.x
+        let newY = monster.y
+        const offset = monster.animationOffset
+
+        // Simplificar animações para melhor performance
+        switch (monster.animationType) {
+          case "float": {
+            // Usar apenas uma função trigonométrica (mais rápido)
+            const sinVal = Math.sin(time + offset)
+            newX += sinVal * 1.0 // Dobrar movimento para compensar frames pulados
+            newY += sinVal * 1.0
+            break
+          }
+          case "walk": {
+            // Simplificado: usar apenas sin
+            const sinVal = Math.sin(time * 1.5 + offset)
+            newX += sinVal * 1.2 // Dobrar movimento
+            newY += sinVal * 0.8
+            break
+          }
+          case "vibrate": {
+            // Reduzir ainda mais a frequência de Math.random()
+            if (frameCount % 10 === 0) {
+              const rand = (Math.random() - 0.5) * 3.0 // Dobrar amplitude
+              newX += rand
+              newY += rand
+            }
+            break
+          }
+          case "static":
+            // Sem movimento
+            break
+        }
+
+        // Limites otimizados (cache de cálculos)
+        const halfSize = monster.size / 2
+        newX = Math.max(halfSize, Math.min(width - halfSize, newX))
+        newY = Math.max(halfSize, Math.min(height - halfSize, newY))
+
+        return { ...monster, x: newX, y: newY }
       })
+      
+      // Remover monstros que completaram a animação de morte
+      const monstersToRemove = updatedMonsters.filter(m => m.isDying && (m.deathProgress || 0) >= 1)
+
+      // Animar partículas (muito otimizado - processar apenas se necessário)
+      const particleCount = particlesRef.current.length
+      let updatedParticles: Particle[] = []
+      if (particleCount > 0) {
+        // Processar apenas a cada 2 frames para partículas (30fps)
+        if (frameCount % 2 === 0) {
+          updatedParticles = particlesRef.current
+            .map(p => {
+              const newLife = p.life - 0.04 // Dobrar decremento para compensar frames pulados
+              if (newLife <= 0) return null
+              return {
+                ...p,
+                x: p.x + p.vx, // Dobrar movimento para compensar frames pulados
+                y: p.y + p.vy,
+                vy: p.vy + 0.6, // Dobrar gravidade
+                life: newLife
+              }
+            })
+            .filter((p): p is Particle => p !== null)
+            .slice(0, MAX_PARTICLES)
+        } else {
+          updatedParticles = particlesRef.current // Manter partículas sem atualizar
+        }
+      }
+
+      // Animar textos flutuantes (muito otimizado)
+      const textCount = floatingTextsRef.current.length
+      let updatedTexts: FloatingText[] = []
+      if (textCount > 0) {
+        // Processar apenas a cada 2 frames para textos (30fps)
+        if (frameCount % 2 === 0) {
+          updatedTexts = floatingTextsRef.current
+            .map(ft => {
+              const newLife = ft.life - 0.03 // Dobrar decremento
+              if (newLife <= 0) return null
+              return {
+                ...ft,
+                y: ft.y - 4, // Dobrar movimento
+                life: newLife
+              }
+            })
+            .filter((ft): ft is FloatingText => ft !== null)
+            .slice(0, MAX_FLOATING_TEXTS)
+        } else {
+          updatedTexts = floatingTextsRef.current // Manter textos sem atualizar
+        }
+      }
+
+      // Remover monstros que saíram do card (otimizado)
+      const aliveMonsters = updatedMonsters.filter(m => {
+        if (!m.isDying) return true
+        
+        const progress = m.deathProgress || 0
+        // Se progresso >= 1, remover imediatamente (sem cálculos extras)
+        if (progress >= 1) return false
+        
+        // Verificação simplificada: se progresso > 0.9, considerar como fora
+        if (progress > 0.9) {
+          const deathStartY = m.deathStartY || m.y
+          const halfSize = m.size / 2
+          const distanceToTop = deathStartY + halfSize
+          const totalDistance = distanceToTop + m.size
+          const currentY = deathStartY - (progress * totalDistance)
+          return currentY > -halfSize
+        }
+        
+        return true
+      })
+      
+      // Verificar mudanças antes de atualizar refs
+      const hasDyingMonsters = aliveMonsters.some(m => m.isDying)
+      const hasChanges = 
+        aliveMonsters.length !== monstersRef.current.length ||
+        updatedParticles.length !== particlesRef.current.length ||
+        updatedTexts.length !== floatingTextsRef.current.length
+      
+      // Atualizar refs
+      monstersRef.current = aliveMonsters
+      particlesRef.current = updatedParticles
+      floatingTextsRef.current = updatedTexts
+
+      // Sincronizar com estado (otimizado - muito mais agressivo)
+      // Atualizar apenas quando necessário
+      // Se há monstros morrendo, atualizar a cada 2 frames (30fps)
+      // Se há mudanças significativas, atualizar
+      // Caso contrário, atualizar a cada 5 frames (12fps para UI normal - muito mais leve)
+      if (hasDyingMonsters) {
+        // Monstros morrendo: atualizar a cada 2 frames
+        if (frameCount % 2 === 0) {
+          setMonsters([...aliveMonsters])
+          setParticles([...updatedParticles])
+          setFloatingTexts([...updatedTexts])
+        }
+      } else if (hasChanges || frameCount % 5 === 0) {
+        // Mudanças ou atualização periódica: a cada 5 frames
+        setMonsters([...aliveMonsters])
+        setParticles([...updatedParticles])
+        setFloatingTexts([...updatedTexts])
+      }
+
+      // Continuar animação se houver algo para animar
+      // Verificar refs ao invés de arrays atualizados para melhor performance
+      if (monstersRef.current.length > 0 || particlesRef.current.length > 0 || floatingTextsRef.current.length > 0) {
+        animationId = requestAnimationFrame(animate)
+      }
     }
 
     animationId = requestAnimationFrame(animate)
-
     return () => {
       if (animationId) {
         cancelAnimationFrame(animationId)
       }
     }
-  }, [particles.length])
+  }, [gameAreaSize.width, gameAreaSize.height])
 
-  // Reset combo after 10 seconds of inactivity
+  // Reset combo após inatividade
   useEffect(() => {
-    if (combo === 0) return
-
-    const timer = setTimeout(() => {
-      setCombo(0)
-    }, 10000)
-
-    return () => clearTimeout(timer)
-  }, [combo, viewedIllusions.size])
-
-  // Check for badges when modal closes (only trigger when modal transitions from open to closed)
-  useEffect(() => {
-    const isModalOpen = selectedIllusion !== null
-    const wasModalJustClosed = previousModalOpen.current && !isModalOpen && !showBadge
-    
-    previousModalOpen.current = isModalOpen
-
-    // Only check for badges when modal was just closed
-    if (!wasModalJustClosed || viewedIllusions.size === 0) return
-
-    const destroyedCount = viewedIllusions.size
-    let badgeId: string | null = null
-
-    // Priority order: master > combo > halfway > streak > first
-    if (destroyedCount === 6 && !shownBadges.has("master")) {
-      badgeId = "master"
-    } else if (combo >= 3 && !shownBadges.has("combo3")) {
-      badgeId = "combo3"
-    } else if (destroyedCount === 3 && !shownBadges.has("halfway")) {
-      badgeId = "halfway"
-    } else if (destroyedCount === 5 && !shownBadges.has("streak5")) {
-      badgeId = "streak5"
-    } else if (destroyedCount === 1 && !shownBadges.has("first")) {
-      badgeId = "first"
-    }
-
-    if (badgeId) {
-      const badgeToShow = badges.find(b => b.id === badgeId)
-      if (badgeToShow) {
-        // Delay to ensure modal animation completes and user can read content
-        const timer = setTimeout(() => {
-          if (!selectedIllusion && !showBadge) {
-            const newShownBadges = new Set([...shownBadges, badgeId!])
-            setShownBadges(newShownBadges)
-            setShowBadge(badgeToShow)
-            // Salvar badge no banco imediatamente
-            updateProgress({
-              earnedBadges: Array.from(newShownBadges)
-            })
-          }
-        }, 1000) // Increased delay to allow user to read
-        return () => clearTimeout(timer)
+    if (combo > 0) {
+      if (comboTimeoutRef.current) {
+        clearTimeout(comboTimeoutRef.current)
       }
-    }
-  }, [selectedIllusion, showBadge, viewedIllusions.size, combo, badges, shownBadges, updateProgress])
-
-  // Check level up - only show when modal is closed
-  useEffect(() => {
-    const newLevel = Math.floor(xp / XP_PER_LEVEL) + 1
-    if (newLevel > level && xp > 0 && !selectedIllusion && !showBadge && hasLoadedFromDb.current) {
-      setLevel(newLevel)
-      // Salvar nível no banco
-      updateProgress({
-        level: newLevel
-      })
       
-      const levelBadgeId = `levelup-${newLevel}`
-      if (!shownBadges.has(levelBadgeId)) {
-        // Delay to allow other badges to show first
-        const timer = setTimeout(() => {
-          if (!showBadge && !selectedIllusion) {
-            const newShownBadges = new Set([...shownBadges, levelBadgeId])
-            setShownBadges(newShownBadges)
-            setShowBadge({
-              id: levelBadgeId,
-              title: language === "pt" ? "Subiu de Nível!" : language === "es" ? "¡Subiste de Nivel!" : "Level Up!",
-              description: language === "pt" ? `Nível ${newLevel} alcançado!` : language === "es" ? `¡Nivel ${newLevel} alcanzado!` : `Level ${newLevel} reached!`,
-              icon: <TrendingUp className="h-8 w-8" />,
-              color: "from-purple-500 to-indigo-500"
-            })
-            // Salvar badge no banco imediatamente
-            updateProgress({
-              earnedBadges: Array.from(newShownBadges)
-            })
-          }
-        }, 500)
-        return () => clearTimeout(timer)
+      comboTimeoutRef.current = setTimeout(() => {
+        setCombo(0)
+      }, 3000) // 3 segundos de inatividade
+    }
+
+    return () => {
+      if (comboTimeoutRef.current) {
+        clearTimeout(comboTimeoutRef.current)
       }
     }
-  }, [xp, level, language, showBadge, selectedIllusion, shownBadges, updateProgress])
+  }, [combo, totalKills])
 
-  const handleDestroyIllusion = (illusion: Illusion) => {
-    const cardElement = cardRefs.current.get(illusion.id)
-    if (!cardElement) return
-
-    const rect = cardElement.getBoundingClientRect()
+  // Criar partículas de explosão (muito otimizado - mínimo de partículas)
+  const createExplosion = useCallback((x: number, y: number, color: string, isBoss: boolean = false) => {
+    // Reduzido drasticamente: apenas 8 partículas para boss, 4 para normal
+    const particleCount = isBoss ? 8 : 4
+    const newParticles: Particle[] = []
     
-    // Para mobile: quando o modal abrir, posicionar os pontos no topo da tela
-    // Para desktop: usar a posição do card
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
-    let x: number
-    let y: number
-
-    if (isMobile) {
-      // No mobile, posicionar no topo centralizado quando o modal abrir
-      x = window.innerWidth / 2
-      y = 120 // Posição fixa no topo, abaixo do header
-    } else {
-      // Desktop: usar posição do card
-      x = rect.left + rect.width / 2
-      y = rect.top + rect.height / 2
+    for (let i = 0; i < particleCount; i++) {
+      newParticles.push({
+        id: `p-${Date.now()}-${i}`, // ID mais simples
+        x,
+        y,
+        vx: (Math.random() - 0.5) * (isBoss ? 10 : 6),
+        vy: (Math.random() - 0.5) * (isBoss ? 10 : 6),
+        color,
+        life: 1,
+        size: isBoss ? 3 : 2
+      })
     }
+    
+    setParticles(prev => [...prev, ...newParticles].slice(-MAX_PARTICLES))
+  }, [])
 
-    const wasNew = !viewedIllusions.has(illusion.id)
+  // Adicionar texto flutuante (otimizado - limitado)
+  const addFloatingText = useCallback((text: string, x: number, y: number, type: "xp" | "combo" | "message") => {
+    const newText: FloatingText = {
+      id: `text-${Date.now()}-${Math.random()}`,
+      text,
+      x,
+      y,
+      type,
+      life: 1
+    }
+    setFloatingTexts(prev => [...prev, newText].slice(-MAX_FLOATING_TEXTS))
+  }, [])
 
-    if (wasNew) {
-      // Create explosion effect
-      setIsDestroying(true)
-      setIsExploding(true)
-      createParticles(isMobile ? x : rect.left + rect.width / 2, isMobile ? y : rect.top + rect.height / 2, "#ec4899")
-
-      // Calculate XP with combo
-      const baseXp = illusion.xp
-      const comboMultiplier = combo > 0 ? COMBO_MULTIPLIER : 1
-      const gainedXp = Math.floor(baseXp * comboMultiplier)
-
-      // Update game state
-      const newXp = xp + gainedXp
+  // Destruir monstro
+  const handleMonsterClick = useCallback((monster: Monster, event: React.MouseEvent | React.TouchEvent) => {
+    event.stopPropagation()
+    
+    // Reduzir vida
+    const newHealth = monster.health - 1
+    
+    if (newHealth <= 0) {
+      // Monstro destruído - iniciar animação de morte
+      const isBoss = monster.type === "boss"
+      const isYellow = monster.color === YELLOW_COLOR
+      
+      // Marcar monstro como morrendo e salvar posição inicial
+      setMonsters(prev => prev.map(m => 
+        m.id === monster.id 
+          ? { ...m, health: 0, isDying: true, deathProgress: 0, deathStartY: monster.y }
+          : m
+      ))
+      
+      // Usar pontuação por cor (ou XP padrão para boss)
+      const baseXp = isBoss 
+        ? XP_PER_BOSS 
+        : (colorXpMap[monster.color] || XP_PER_MONSTER)
+      
       const newCombo = combo + 1
-      const newStreak = streak + 1
-      const newViewedIllusions = new Set([...viewedIllusions, illusion.id])
+      const comboMultiplier = getComboMultiplier(newCombo)
+      const gainedXp = baseXp * comboMultiplier
+      
+      // Criar explosão
+      createExplosion(monster.x, monster.y, monster.color, isBoss)
+      
+      // Adicionar texto de XP
+      addFloatingText(`+${gainedXp} XP`, monster.x, monster.y, "xp")
+      
+      // Se for amarelo, rastrear e verificar se chegou a 5
+      if (isYellow && !isBoss) {
+        const newYellowKills = yellowKills + 1
+        setYellowKills(newYellowKills)
+        
+        // Adicionar texto especial para monstro amarelo
+        addFloatingText("RARO!", monster.x, monster.y - 40, "combo")
+        
+        // Se chegou a 5, mostrar mensagem lendária
+        if (newYellowKills >= YELLOW_MONSTERS_FOR_LEGENDARY) {
+          const legendaryMessage = TRUTH_MESSAGES.legendary[Math.floor(Math.random() * TRUTH_MESSAGES.legendary.length)]
+          setShowMessage(legendaryMessage)
+          setTimeout(() => setShowMessage(null), 5000)
+          addFloatingText("MENSAGEM LENDÁRIA!", monster.x, monster.y - 60, "message")
+          
+          // Salvar progresso dos monstros amarelos
+          pendingSaveRef.current = {
+            ...pendingSaveRef.current,
+            yellowMonsterKills: newYellowKills
+          }
+        } else {
+          // Mostrar progresso
+          addFloatingText(`${newYellowKills}/${YELLOW_MONSTERS_FOR_LEGENDARY} Amarelos`, monster.x, monster.y - 70, "message")
+        }
+      }
+      
+      // Se for boss, mostrar mensagem
+      if (isBoss) {
+        const message = getRandomMessage()
+        setShowMessage(message)
+        setTimeout(() => setShowMessage(null), 4000)
+        addFloatingText(message, monster.x, monster.y - 50, "message")
+      }
+      
+      // Atualizar combo
+      if (newCombo > 1) {
+        addFloatingText(`${newCombo}x COMBO! (x${comboMultiplier})`, monster.x, monster.y - 30, "combo")
+      }
+      
+      // Atualizar estado
+      const newXp = xp + gainedXp
+      const newLevel = Math.floor(newXp / XP_PER_LEVEL) + 1
+      const newTotalKills = totalKills + 1
       
       setXp(newXp)
       setCombo(newCombo)
-      setStreak(newStreak)
-      setViewedIllusions(newViewedIllusions)
+      setTotalKills(newTotalKills)
       
-      // Salvar no banco imediatamente
-      updateProgress({
+      // Calcular yellowKills atualizado
+      const updatedYellowKills = isYellow && !isBoss ? yellowKills + 1 : yellowKills
+      
+      // Salvar no banco com debounce melhorado
+      pendingSaveRef.current = {
         xp: newXp,
-        destroyedIllusions: Array.from(newViewedIllusions),
+        level: newLevel,
         combo: newCombo,
-        streak: newStreak
-      })
-
-      // Show XP gain animation
-      setShowXpGain({
-        value: gainedXp,
-        x: x,
-        y: y
-      })
-
-      // Manter os pontos visíveis por mais tempo (4 segundos)
+        yellowMonsterKills: updatedYellowKills
+      }
+      
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+      
+      saveTimeoutRef.current = setTimeout(() => {
+        if (pendingSaveRef.current) {
+          updateProgress(pendingSaveRef.current)
+          pendingSaveRef.current = null
+        }
+      }, 2000) // Salvar no máximo a cada 2 segundos
+      
+      // Verificar level up
+      if (newLevel > level) {
+        setLevel(newLevel)
+        
+        // Criar efeito de confete
+        const colors = ["#f59e0b", "#ec4899", "#8b5cf6", "#3b82f6", "#10b981", "#ef4444"]
+        const newConfetti: Array<{ id: string; x: number; y: number; color: string; delay: number; xOffset: number }> = []
+        for (let i = 0; i < 50; i++) {
+          newConfetti.push({
+            id: `confetti-${Date.now()}-${i}`,
+            x: Math.random() * 100,
+            y: -10,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            delay: Math.random() * 0.5,
+            xOffset: (Math.random() - 0.5) * 200
+          })
+        }
+        setConfettiParticles(newConfetti)
+        setTimeout(() => setConfettiParticles([]), 3000)
+        
+        // Verificar badge
+        const badge = LEVEL_BADGES.find(b => b.level === newLevel)
+        if (badge) {
+          setTimeout(() => {
+            setShowBadge(badge)
+            setTimeout(() => setShowBadge(null), 3000)
+          }, 500)
+          
+          // Salvar badge
+          const currentBadges = progress?.earned_badges || []
+          if (!currentBadges.includes(badge.id)) {
+            updateProgress({
+              earnedBadges: [...currentBadges, badge.id]
+            })
+          }
+        }
+      }
+      
+      // Adicionar novo monstro após a animação de morte (com delay para dar tempo de ver recompensas)
       setTimeout(() => {
-        setShowXpGain(null)
-      }, 4000)
-
-      // Reset explosion effect
-      setTimeout(() => {
-        setIsDestroying(false)
-        setIsExploding(false)
-      }, 1000)
+        setMonsters(prev => {
+          // Verificar se o monstro ainda existe (não foi removido pela animação)
+          const stillExists = prev.some(m => m.id === monster.id)
+          if (!stillExists) {
+            // Verificar se não excedeu o máximo de monstros
+            const aliveMonsters = prev.filter(m => !m.isDying || (m.deathProgress || 0) < 1)
+            if (aliveMonsters.length < MAX_MONSTERS) {
+              // Adicionar novo monstro (pode ser boss ocasionalmente)
+              const isNewBoss = Math.random() < BOSS_SPAWN_CHANCE
+              const newMonster = createMonster(isNewBoss)
+              return [...prev, newMonster]
+            }
+          }
+          return prev
+        })
+      }, DEATH_ANIMATION_DURATION - 200) // Adicionar novo monstro um pouco antes da animação terminar
+    } else {
+      // Ainda tem vida - atualizar vida
+      setMonsters(prev => prev.map(m => 
+        m.id === monster.id ? { ...m, health: newHealth } : m
+      ))
+      
+      // Efeito de hit
+      createExplosion(monster.x, monster.y, monster.color, false)
     }
+  }, [combo, xp, totalKills, level, progress, createMonster, createExplosion, addFloatingText, updateProgress, colorXpMap, yellowKills])
 
-    // Show modal with reality
-    setSelectedIllusion(illusion)
-  }
+  // Memoizar cálculos para evitar recálculos desnecessários
+  const currentLevelXp = useMemo(() => xp % XP_PER_LEVEL, [xp])
+  const progressPercentage = useMemo(() => (currentLevelXp / XP_PER_LEVEL) * 100, [currentLevelXp])
 
-  const handleCloseIllusion = () => {
-    setSelectedIllusion(null)
-    // Badges will be checked automatically by useEffect when modal closes
-  }
-
-  const handleConfirmReality = () => {
-    setSelectedIllusion(null)
-    // Badges will be checked automatically by useEffect when modal closes
-  }
-
-  const getCategoryColor = (category: string) => {
-    const colors: Record<string, string> = {
-      [language === "pt" ? "Controle" : language === "es" ? "Control" : "Control"]: "from-pink-500 to-rose-500",
-      [language === "pt" ? "Bem-estar" : language === "es" ? "Bienestar" : "Wellbeing"]: "from-blue-500 to-cyan-500",
-      [language === "pt" ? "Realidade" : language === "es" ? "Realidad" : "Reality"]: "from-orange-500 to-amber-500",
-      [language === "pt" ? "Dependência" : language === "es" ? "Dependencia" : "Dependence"]: "from-purple-500 to-indigo-500",
-      [language === "pt" ? "Social" : language === "es" ? "Social" : "Social"]: "from-green-500 to-emerald-500",
-      [language === "pt" ? "Mudança" : language === "es" ? "Cambio" : "Change"]: "from-yellow-500 to-orange-500"
-    }
-    return colors[category] || "from-gray-500 to-gray-600"
+  if (isLoadingProgress || !hasLoadedFromDb) {
+    return (
+      <div className="min-h-screen tools-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-white" />
+      </div>
+    )
   }
 
   return (
@@ -539,64 +997,93 @@ export default function IllusionBusterPage() {
       <MobileHeader />
       <DesktopSidebar />
 
-      {/* Particles Layer */}
+      {/* Partículas */}
       <div className="fixed inset-0 pointer-events-none z-40">
         {particles.map(particle => (
           <div
             key={particle.id}
-            className="absolute w-2 h-2 rounded-full"
+            className="absolute rounded-full"
             style={{
               left: `${particle.x}px`,
               top: `${particle.y}px`,
+              width: `${particle.size}px`,
+              height: `${particle.size}px`,
               backgroundColor: particle.color,
               opacity: particle.life,
-              transform: `scale(${particle.life})`,
-              transition: "opacity 0.1s, transform 0.1s"
+              transform: `translate3d(0, 0, 0) scale(${particle.life})`,
+              boxShadow: `0 0 ${particle.size * 2}px ${particle.color}`,
+              willChange: "transform, opacity"
             }}
           />
         ))}
       </div>
 
-      {/* XP Gain Animation */}
-      {showXpGain && (
-        <div
-          className="fixed z-50 pointer-events-none xp-gain-animation"
-          style={{
-            left: `${showXpGain.x}px`,
-            top: `${showXpGain.y}px`,
-            transform: "translate(-50%, -50%)"
-          }}
-        >
-          <div className="text-xl sm:text-2xl md:text-3xl font-extrabold text-yellow-400 whitespace-nowrap text-center" style={{
-            textShadow: "0 0 20px rgba(250, 204, 21, 0.8), 0 0 40px rgba(250, 204, 21, 0.6), 0 4px 8px rgba(0, 0, 0, 0.9), 2px 2px 4px rgba(0, 0, 0, 0.8)"
-          }}>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-3">
-              <span className="animate-pulse">+{showXpGain.value} XP</span>
-              {combo > 1 && (
-                <span className="text-orange-400 text-base sm:text-lg md:text-xl font-bold" style={{
-                  textShadow: "0 0 15px rgba(251, 146, 60, 0.8), 0 0 30px rgba(251, 146, 60, 0.6), 0 2px 4px rgba(0, 0, 0, 0.9)"
-                }}>
-                  {combo}x COMBO!
-                </span>
-              )}
-            </div>
-          </div>
+      {/* Confetti */}
+      {confettiParticles.length > 0 && (
+        <div className="fixed inset-0 pointer-events-none z-[45]">
+          {confettiParticles.map(confetti => (
+            <div
+              key={confetti.id}
+              className="confetti"
+              style={{
+                left: `${confetti.x}%`,
+                top: `${confetti.y}%`,
+                backgroundColor: confetti.color,
+                animationDelay: `${confetti.delay}s`,
+                width: "10px",
+                height: "10px",
+                borderRadius: "50%",
+                "--confetti-x": confetti.xOffset
+              } as React.CSSProperties}
+            />
+          ))}
         </div>
       )}
 
-      {/* Badge Notification */}
+      {/* Textos flutuantes */}
+      <div className="fixed inset-0 pointer-events-none z-50">
+        {floatingTexts.map(ft => (
+          <div
+            key={ft.id}
+            className="absolute whitespace-nowrap"
+            style={{
+              left: `${ft.x}px`,
+              top: `${ft.y}px`,
+              transform: "translate3d(-50%, -50%, 0)",
+              opacity: ft.life,
+              fontSize: ft.type === "message" ? "14px" : ft.type === "combo" ? "20px" : "24px",
+              fontWeight: "bold",
+              color: ft.type === "xp" ? "#fbbf24" : ft.type === "combo" ? "#f59e0b" : "#10b981",
+              textShadow: "0 0 10px currentColor, 0 2px 4px rgba(0,0,0,0.8)",
+              willChange: "transform, opacity"
+            }}
+          >
+            {ft.text}
+          </div>
+        ))}
+      </div>
+
+      {/* Mensagem de verdade (popup) */}
+      {showMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+          <Card className="max-w-md w-full p-6 bg-gradient-to-br from-green-500/90 to-emerald-500/90 border-green-400/50 backdrop-blur-xl animate-in zoom-in-95 duration-300 pointer-events-auto">
+            <div className="text-center">
+              <Sparkles className="h-8 w-8 text-white mx-auto mb-3 animate-pulse" />
+              <p className="text-white font-semibold text-lg leading-relaxed">
+                {showMessage}
+              </p>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Badge notification */}
       {showBadge && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-500">
-          <Card className={cn(
-            "max-w-md w-full p-8 bg-gradient-to-br border-2 animate-in zoom-in-95 duration-500",
-            `bg-gradient-to-br ${showBadge.color} border-white/30 backdrop-blur-xl`
-          )}>
+          <Card className="max-w-md w-full p-8 bg-gradient-to-br from-purple-500 to-indigo-500 border-white/30 backdrop-blur-xl animate-in zoom-in-95 duration-500">
             <div className="flex flex-col items-center text-center space-y-4">
-              <div className={cn(
-                "p-4 rounded-full bg-white/20 animate-pulse",
-                `text-white`
-              )}>
-                {showBadge.icon}
+              <div className="p-4 rounded-full bg-white/20 animate-pulse">
+                <Crown className="h-12 w-12 text-white" />
               </div>
               <div>
                 <h3 className="text-2xl font-bold text-white mb-2">
@@ -606,12 +1093,6 @@ export default function IllusionBusterPage() {
                   {showBadge.description}
                 </p>
               </div>
-              <Button
-                onClick={() => setShowBadge(null)}
-                className="bg-white/20 hover:bg-white/30 text-white border border-white/30"
-              >
-                {language === "pt" ? "Continuar" : language === "es" ? "Continuar" : "Continue"}
-              </Button>
             </div>
           </Card>
         </div>
@@ -621,9 +1102,9 @@ export default function IllusionBusterPage() {
         collapsed ? "md:ml-20 lg:ml-20" : "md:ml-56 lg:ml-64",
         "transition-all duration-300"
       )}>
-        <main className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pt-16 sm:pt-20 md:pt-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-6 pb-20 md:pb-8 relative z-10">
+        <main className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pt-16 sm:pt-20 md:pt-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-6 pb-20 md:pb-8 relative z-10">
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-4 sm:mb-6 md:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-4 sm:mb-6">
             <Link href="/tools">
               <Button
                 variant="ghost"
@@ -640,20 +1121,20 @@ export default function IllusionBusterPage() {
                   <X className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 lg:h-8 lg:w-8 text-pink-400" />
                 </div>
                 <span className="leading-tight">
-                  {language === "pt" ? "Illusion Buster" : language === "es" ? "Rompedor de Ilusiones" : "Illusion Buster"}
+                  {language === "pt" ? "Derrote a Ilusão" : language === "es" ? "Derrota la Ilusión" : "Defeat the Illusion"}
                 </span>
               </h1>
               <p className="text-xs sm:text-sm md:text-base text-white/70">
                 {language === "pt"
-                  ? "Destrua as ilusões que mantêm você preso no vício da pornografia. Ganhe XP, suba de nível e liberte-se!"
+                  ? "Toque nos monstros para destruí-los! Mantenha o combo e ganhe XP!"
                   : language === "es"
-                  ? "Destruye las ilusiones que te mantienen atrapado en la adicción a la pornografía. ¡Gana XP, sube de nivel y libérate!"
-                  : "Destroy the illusions that keep you trapped in pornography addiction. Earn XP, level up, and free yourself!"}
+                  ? "¡Toca los monstruos para destruirlos! ¡Mantén el combo y gana XP!"
+                  : "Tap monsters to destroy them! Keep the combo and earn XP!"}
               </p>
             </div>
           </div>
 
-          {/* Game Stats */}
+          {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <Card className="p-3 sm:p-4 bg-gradient-to-br from-purple-500/20 to-indigo-500/20 border-purple-400/30 backdrop-blur-sm">
               <div className="flex items-center gap-2 mb-1">
@@ -673,14 +1154,6 @@ export default function IllusionBusterPage() {
               <div className="text-2xl font-bold text-white">{xp}</div>
             </Card>
 
-            <Card className="p-3 sm:p-4 bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-green-400/30 backdrop-blur-sm">
-              <div className="flex items-center gap-2 mb-1">
-                <Target className="h-4 w-4 text-green-400" />
-                <span className="text-xs text-white/60">{language === "pt" ? "Destruídas" : language === "es" ? "Destruidas" : "Destroyed"}</span>
-              </div>
-              <div className="text-2xl font-bold text-white">{viewedIllusions.size}/{illusions.length}</div>
-            </Card>
-
             <Card className="p-3 sm:p-4 bg-gradient-to-br from-red-500/20 to-orange-500/20 border-red-400/30 backdrop-blur-sm">
               <div className="flex items-center gap-2 mb-1">
                 <Zap className="h-4 w-4 text-red-400" />
@@ -688,13 +1161,113 @@ export default function IllusionBusterPage() {
               </div>
               <div className="text-2xl font-bold text-white">{combo}x</div>
             </Card>
+
+            <Card className="p-3 sm:p-4 bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-green-400/30 backdrop-blur-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <Target className="h-4 w-4 text-green-400" />
+                <span className="text-xs text-white/60">{language === "pt" ? "Eliminados" : language === "es" ? "Eliminados" : "Kills"}</span>
+              </div>
+              <div className="text-2xl font-bold text-white">{totalKills}</div>
+            </Card>
           </div>
 
-          {/* Description Card */}
+          {/* Pontuações por cor e progresso amarelo */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+            <Card className="p-4 sm:p-5 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-blue-400/30 backdrop-blur-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="h-5 w-5 text-blue-400" />
+                <h3 className="text-sm font-semibold text-white">
+                  {language === "pt" ? "Pontuações por Cor" : language === "es" ? "Puntuaciones por Color" : "Points by Color"}
+                </h3>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {Object.entries(colorXpMap).map(([color, xpValue]) => {
+                  const isYellow = color === YELLOW_COLOR
+                  return (
+                    <div
+                      key={color}
+                      className={cn(
+                        "p-2 rounded-lg text-center",
+                        isYellow ? "bg-yellow-500/30 border-2 border-yellow-400/50" : "bg-black/20"
+                      )}
+                    >
+                      <div
+                        className="w-6 h-6 rounded-full mx-auto mb-1"
+                        style={{ backgroundColor: color }}
+                      />
+                      <div className="text-xs font-bold text-white">{xpValue} XP</div>
+                      {isYellow && (
+                        <div className="text-[10px] text-yellow-300 font-semibold mt-0.5">RARO</div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+
+            <Card className="p-4 sm:p-5 bg-gradient-to-br from-yellow-500/20 to-amber-500/20 border-yellow-400/30 backdrop-blur-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <Star className="h-5 w-5 text-yellow-400" />
+                <h3 className="text-sm font-semibold text-white">
+                  {language === "pt" ? "Monstros Amarelos Raros" : language === "es" ? "Monstruos Amarillos Raros" : "Rare Yellow Monsters"}
+                </h3>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-white/70">
+                    {language === "pt" ? "Progresso:" : language === "es" ? "Progreso:" : "Progress:"}
+                  </span>
+                  <span className="text-sm font-bold text-yellow-300">
+                    {yellowKills}/{YELLOW_MONSTERS_FOR_LEGENDARY}
+                  </span>
+                </div>
+                <Progress 
+                  value={(yellowKills / YELLOW_MONSTERS_FOR_LEGENDARY) * 100} 
+                  className="h-2 bg-white/10" 
+                />
+                <p className="text-xs text-white/60 mt-2">
+                  {language === "pt"
+                    ? `Elimine ${YELLOW_MONSTERS_FOR_LEGENDARY} monstros amarelos raros para desbloquear uma mensagem lendária!`
+                    : language === "es"
+                    ? `¡Elimina ${YELLOW_MONSTERS_FOR_LEGENDARY} monstruos amarillos raros para desbloquear un mensaje legendario!`
+                    : `Eliminate ${YELLOW_MONSTERS_FOR_LEGENDARY} rare yellow monsters to unlock a legendary message!`}
+                </p>
+              </div>
+            </Card>
+          </div>
+
+          {/* Game Area */}
+          <Card className="p-4 sm:p-6 bg-black/20 backdrop-blur-md border-white/10 relative overflow-hidden" style={{ minHeight: "500px" }}>
+            <div
+              ref={gameAreaRef}
+              className="relative w-full h-full"
+              style={{ minHeight: "500px" }}
+            >
+              {monsters.map(monster => (
+                <MonsterComponent
+                  key={monster.id}
+                  monster={monster}
+                  onClick={handleMonsterClick}
+                  cardHeight={gameAreaSize.height || 500}
+                />
+              ))}
+              
+              {monsters.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center text-white/50">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                    <p>{language === "pt" ? "Carregando monstros..." : language === "es" ? "Cargando monstruos..." : "Loading monsters..."}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Instructions */}
           <Card className="p-4 sm:p-6 bg-gradient-to-br from-pink-500/20 via-rose-500/20 to-pink-500/20 border-pink-400/30 backdrop-blur-sm">
             <div className="flex items-start gap-4">
               <div className="p-2 rounded-lg bg-pink-500/20 shrink-0">
-                <Lightbulb className="h-5 w-5 sm:h-6 sm:w-6 text-pink-400" />
+                <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-pink-400" />
               </div>
               <div className="flex-1">
                 <h3 className="text-lg font-semibold text-white mb-2">
@@ -702,229 +1275,14 @@ export default function IllusionBusterPage() {
                 </h3>
                 <p className="text-white/90 text-sm leading-relaxed">
                   {language === "pt"
-                    ? "Clique em qualquer ilusão para descobrir a verdade e destruí-la! Cada ilusão destruída te dá XP. Mantenha um combo destruindo várias ilusões em sequência para ganhar mais XP. Suba de nível e ganhe badges incríveis enquanto liberta sua mente do vício da pornografia."
+                    ? "Toque nos monstros para destruí-los e ganhar XP! Mantenha um combo tocando rapidamente para multiplicar seus pontos. Monstros maiores (com coroa) são chefões que dão mais XP e revelam mensagens de verdade quando derrotados. Suba de nível e desbloqueie badges incríveis!"
                     : language === "es"
-                    ? "¡Haz clic en cualquier ilusión para descubrir la verdad y destruirla! Cada ilusión destruida te da XP. Mantén un combo destruyendo varias ilusiones seguidas para ganar más XP. Sube de nivel y gana badges increíbles mientras liberas tu mente de la adicción a la pornografía."
-                    : "Click on any illusion to discover the truth and destroy it! Each destroyed illusion gives you XP. Maintain a combo by destroying multiple illusions in a row to earn more XP. Level up and earn amazing badges while freeing your mind from pornography addiction."}
+                    ? "¡Toca los monstruos para destruirlos y ganar XP! Mantén un combo tocando rápidamente para multiplicar tus puntos. Los monstruos grandes (con corona) son jefes que dan más XP y revelan mensajes de verdad cuando son derrotados. ¡Sube de nivel y desbloquea badges increíbles!"
+                    : "Tap monsters to destroy them and earn XP! Keep a combo by tapping quickly to multiply your points. Bigger monsters (with crown) are bosses that give more XP and reveal truth messages when defeated. Level up and unlock amazing badges!"}
                 </p>
               </div>
             </div>
           </Card>
-
-          {/* Illusions Grid */}
-          {isLoadingIllusions ? (
-            <Card className="p-8 text-center">
-              <div className="flex flex-col items-center gap-4">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-muted-foreground">
-                  {language === "pt" ? "Carregando ilusões..." : language === "es" ? "Cargando ilusiones..." : "Loading illusions..."}
-                </p>
-              </div>
-            </Card>
-          ) : illusions.length === 0 ? (
-            <Card className="p-8 text-center">
-              <Eye className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">
-                {language === "pt" ? "Nenhuma ilusão disponível" : language === "es" ? "No hay ilusiones disponibles" : "No illusions available"}
-              </h3>
-              <p className="text-muted-foreground">
-                {language === "pt" ? "As ilusões serão carregadas em breve." : language === "es" ? "Las ilusiones se cargarán pronto." : "Illusions will be loaded soon."}
-              </p>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-            {illusions.map((illusion) => {
-              const isDestroyed = viewedIllusions.has(illusion.id)
-              const categoryColor = getCategoryColor(illusion.category)
-              
-              return (
-                <Card
-                  key={illusion.id}
-                  ref={(el) => {
-                    if (el) cardRefs.current.set(illusion.id, el)
-                  }}
-                  onClick={() => handleDestroyIllusion(illusion)}
-                  className={cn(
-                    "p-4 sm:p-5 cursor-pointer transition-all duration-300 relative overflow-hidden",
-                    "bg-black/20 backdrop-blur-md border border-white/10",
-                    isDestroyed 
-                      ? "border-green-400/50 bg-green-500/20 scale-95" 
-                      : "hover:scale-105 hover:bg-black/30 hover:border-pink-400/30 hover:shadow-lg hover:shadow-pink-500/20",
-                    isExploding && selectedIllusion?.id === illusion.id && "animate-pulse"
-                  )}
-                >
-                  {/* Destruction effect overlay */}
-                  {isDestroyed && (
-                    <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-emerald-500/20 animate-pulse" />
-                  )}
-
-                  <div className="relative z-10">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={cn(
-                            "px-2 py-1 rounded-md text-xs font-semibold",
-                            "bg-gradient-to-r text-white",
-                            categoryColor
-                          )}>
-                            {illusion.category}
-                          </span>
-                          {isDestroyed && (
-                            <CheckCircle2 className="h-4 w-4 text-green-400 animate-in zoom-in duration-300" />
-                          )}
-                        </div>
-                        <h3 className={cn(
-                          "text-base sm:text-lg font-bold mb-2 transition-all",
-                          isDestroyed ? "text-green-300 line-through" : "text-white"
-                        )}>
-                          {illusion.title}
-                        </h3>
-                        <p className={cn(
-                          "text-sm leading-relaxed transition-all",
-                          isDestroyed ? "text-white/50" : "text-white/70"
-                        )}>
-                          {illusion.description}
-                        </p>
-                      </div>
-                      <div className={cn(
-                        "p-2 rounded-lg shrink-0 transition-all",
-                        isDestroyed 
-                          ? "bg-green-500/30" 
-                          : "bg-pink-500/20"
-                      )}>
-                        {isDestroyed ? (
-                          <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
-                        ) : (
-                          <Eye className="h-4 w-4 sm:h-5 sm:w-5 text-pink-400" />
-                        )}
-                      </div>
-                    </div>
-                    {!isDestroyed && (
-                      <div className="flex items-center gap-2 text-xs text-pink-400">
-                        <Sparkles className="h-3 w-3" />
-                        <span>
-                          {language === "pt" ? "Clique para destruir" : language === "es" ? "Haz clic para destruir" : "Click to destroy"}
-                        </span>
-                      </div>
-                    )}
-                    {isDestroyed && (
-                      <div className="flex items-center gap-2 text-xs text-green-400">
-                        <Trophy className="h-3 w-3" />
-                        <span>
-                          {language === "pt" ? "Destruída! +" + illusion.xp + " XP" : language === "es" ? "¡Destruida! +" + illusion.xp + " XP" : "Destroyed! +" + illusion.xp + " XP"}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              )
-            })}
-          </div>
-          )}
-
-          {/* Selected Illusion Modal */}
-          {selectedIllusion && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-              <Card className="max-w-2xl w-full p-6 sm:p-8 bg-gradient-to-br from-pink-950/95 via-rose-950/95 to-pink-950/95 border-pink-400/30 backdrop-blur-xl relative animate-in zoom-in-95 duration-300">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCloseIllusion}
-                  className="absolute top-4 right-4 text-white hover:bg-white/10"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-
-                <div className="space-y-4 sm:space-y-6">
-                  {/* Header */}
-                  <div className="flex items-start gap-4">
-                    <div className={cn(
-                      "p-3 rounded-xl bg-gradient-to-r shrink-0 animate-pulse",
-                      getCategoryColor(selectedIllusion.category)
-                    )}>
-                      <AlertCircle className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <span className={cn(
-                        "inline-block px-3 py-1 rounded-md text-xs font-semibold mb-2",
-                        "bg-gradient-to-r text-white",
-                        getCategoryColor(selectedIllusion.category)
-                      )}>
-                        {selectedIllusion.category}
-                      </span>
-                      <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-2">
-                        {selectedIllusion.title}
-                      </h2>
-                      <p className="text-sm sm:text-base text-white/70">
-                        {selectedIllusion.description}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Reality Section */}
-                  <div className="p-4 sm:p-6 rounded-xl bg-green-500/20 border border-green-400/30 animate-in slide-in-from-bottom-4 duration-500">
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="p-2 rounded-lg bg-green-500/20 shrink-0">
-                        <Brain className="h-5 w-5 sm:h-6 sm:w-6 text-green-400" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-lg sm:text-xl font-bold text-green-400 mb-2">
-                          {language === "pt" ? "A Realidade" : language === "es" ? "La Realidad" : "The Reality"}
-                        </h3>
-                        <p className="text-white/90 text-sm sm:text-base leading-relaxed">
-                          {selectedIllusion.reality}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Action Button */}
-                  <div className="flex justify-end gap-3">
-                    <Button
-                      onClick={handleCloseIllusion}
-                      variant="outline"
-                      className="border-white/20 text-white hover:bg-white/10"
-                    >
-                      {language === "pt" ? "Fechar" : language === "es" ? "Cerrar" : "Close"}
-                    </Button>
-                    <Button
-                      onClick={handleConfirmReality}
-                      className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white"
-                    >
-                      {language === "pt" ? "Aceitar Realidade" : language === "es" ? "Aceptar Realidad" : "Accept Reality"}
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          )}
-
-          {/* Progress Card */}
-          {viewedIllusions.size > 0 && (
-            <Card className="p-4 sm:p-6 bg-gradient-to-br from-green-500/20 via-emerald-500/20 to-green-500/20 border-green-400/30 backdrop-blur-sm animate-in slide-in-from-bottom-4 duration-500">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-lg bg-green-500/20 shrink-0">
-                  <Award className="h-6 w-6 sm:h-8 sm:w-8 text-green-400" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-white mb-1">
-                    {language === "pt" ? "Seu Progresso" : language === "es" ? "Tu Progreso" : "Your Progress"}
-                  </h3>
-                  <p className="text-white/90 text-sm">
-                    {language === "pt"
-                      ? `Você destruiu ${viewedIllusions.size} ${viewedIllusions.size === 1 ? "ilusão" : "ilusões"}! Continue destruindo todas as ilusões para ganhar o badge de Mestre da Consciência!`
-                      : language === "es"
-                      ? `¡Has destruido ${viewedIllusions.size} ${viewedIllusions.size === 1 ? "ilusión" : "ilusiones"}! ¡Continúa destruyendo todas las ilusiones para ganar el badge de Maestro de la Conciencia!`
-                      : `You've destroyed ${viewedIllusions.size} ${viewedIllusions.size === 1 ? "illusion" : "illusions"}! Keep destroying all illusions to earn the Master of Awareness badge!`}
-                  </p>
-                  <Progress 
-                    value={(viewedIllusions.size / illusions.length) * 100} 
-                    className="h-2 mt-3 bg-white/10" 
-                  />
-                </div>
-              </div>
-            </Card>
-          )}
         </main>
       </div>
 

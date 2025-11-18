@@ -490,3 +490,74 @@
 .dropdown-menu-no-scroll > div {
   overflow: visible !important;
 }
+
+/* Monster Game Animations */
+@keyframes monsterPulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+@keyframes monsterGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 10px currentColor);
+    opacity: 1;
+  }
+  50% {
+    filter: drop-shadow(0 0 20px currentColor);
+    opacity: 0.9;
+  }
+}
+
+@keyframes bossPulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    filter: drop-shadow(0 0 15px #f59e0b);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.15);
+    filter: drop-shadow(0 0 25px #fbbf24);
+  }
+}
+
+@keyframes confetti {
+  0% {
+    transform: translateY(0) rotate(0deg) translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg) translateX(calc(var(--confetti-x, 0) * 1px));
+    opacity: 0;
+  }
+}
+
+.monster-normal {
+  /* Animação CSS desabilitada para melhor performance - usando apenas JS */
+  will-change: transform;
+  transform: translateZ(0); /* Aceleração de hardware */
+}
+
+.monster-boss {
+  /* Animação CSS desabilitada para melhor performance - usando apenas JS */
+  will-change: transform;
+  transform: translateZ(0); /* Aceleração de hardware */
+}
+
+.monster-hit {
+  animation: monsterPulse 0.2s ease-in-out;
+  will-change: transform;
+}
+
+/* Level up confetti effect */
+.confetti {
+  position: fixed;
+  width: 10px;
+  height: 10px;
+  background: var(--confetti-color);
+  animation: confetti 3s linear forwards;
+  pointer-events: none;
+  z-index: 1000;
+}

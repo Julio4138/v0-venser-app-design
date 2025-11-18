@@ -248,6 +248,54 @@ export default function TasksPage() {
     loadUserProgress()
   }, [loadPlannerData, loadUserProgress])
 
+  // Subscribe to daily_planner changes for real-time sync
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null
+
+    const setupSubscription = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      const today = new Date().toISOString().split("T")[0]
+
+      channel = supabase
+        .channel(`planner_changes_${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'daily_planner',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            // Reload planner data when changes occur
+            if (payload.new && (payload.new as any).planner_date === today) {
+              loadPlannerData()
+            }
+          }
+        )
+        .subscribe()
+
+      return () => {
+        if (channel) {
+          supabase.removeChannel(channel)
+        }
+      }
+    }
+
+    setupSubscription()
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [loadPlannerData])
+
   // Auto-save with debounce
   useEffect(() => {
     if (isLoading) return
@@ -258,6 +306,68 @@ export default function TasksPage() {
 
     return () => clearTimeout(timeoutId)
   }, [plannerData, isLoading])
+
+  const syncPlannerTasksToProgram = async (tasks: Task[], userId: string) => {
+    try {
+      // Get current day from user progress
+      const { data: progress, error: progressError } = await supabase
+        .from("user_progress")
+        .select("current_day")
+        .eq("user_id", userId)
+        .single()
+
+      if (progressError || !progress?.current_day) {
+        console.log("No current day found or error:", progressError)
+        return
+      }
+
+      const currentDayNumber = progress.current_day
+
+      // Get program day to ensure it exists
+      const { data: programDay, error: programDayError } = await supabase
+        .from("program_days")
+        .select("id, template_id")
+        .eq("user_id", userId)
+        .eq("day_number", currentDayNumber)
+        .single()
+
+      if (programDayError && programDayError.code === 'PGRST116') {
+        // Program day doesn't exist, create it
+        const { data: newProgramDay, error: insertError } = await supabase
+          .from("program_days")
+          .insert({
+            user_id: userId,
+            day_number: currentDayNumber,
+            unlocked_at: new Date().toISOString(),
+          })
+          .select()
+          .single()
+
+        if (insertError || !newProgramDay) {
+          console.error("Error creating program day:", insertError)
+          return
+        }
+      } else if (programDayError) {
+        console.error("Error fetching program day:", programDayError)
+        return
+      }
+
+      // Store planner tasks in program_days
+      const { error: updateError } = await supabase
+        .from("program_days")
+        .update({
+          planner_tasks: tasks,
+        })
+        .eq("user_id", userId)
+        .eq("day_number", currentDayNumber)
+
+      if (updateError) {
+        console.error("Error updating planner tasks:", updateError)
+      }
+    } catch (error) {
+      console.error("Error syncing planner tasks to program:", error)
+    }
+  }
 
   const savePlannerData = async () => {
     try {
@@ -303,6 +413,9 @@ export default function TasksPage() {
       if (error) {
         throw error
       }
+
+      // Sync tasks to program for current day
+      await syncPlannerTasksToProgram(tasksArray, user.id)
 
       setLastSaved(new Date())
     } catch (error: any) {
