@@ -25,6 +25,14 @@ import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
 import { supabase } from "@/lib/supabase/client"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 export default function DashboardPage() {
   const { language } = useLanguage()
@@ -61,6 +69,7 @@ export default function DashboardPage() {
   const [isSideEffectsDialogOpen, setIsSideEffectsDialogOpen] = useState(false)
   const [isMotivationDialogOpen, setIsMotivationDialogOpen] = useState(false)
   const [isSuccessStoriesDialogOpen, setIsSuccessStoriesDialogOpen] = useState(false)
+  const [isPledgeDialogOpen, setIsPledgeDialogOpen] = useState(false)
   
   // Estado do timer - controla se está rodando e a data de início
   const [isTimerRunning, setIsTimerRunning] = useState(() => {
@@ -690,14 +699,20 @@ export default function DashboardPage() {
               </button>
             )}
             
-            <button className="flex flex-col items-center gap-3 text-white hover:opacity-80 transition-opacity">
-              <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+            <button 
+              onClick={() => setIsPledgeDialogOpen(true)}
+              className="flex flex-col items-center gap-3 text-white hover:opacity-80 transition-opacity"
+            >
+              <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors">
                 <span className="text-2xl md:text-3xl">🛑</span>
               </div>
               <span className="text-sm md:text-base font-medium">{t.pledge}</span>
             </button>
-            <button className="flex flex-col items-center gap-3 text-white hover:opacity-80 transition-opacity">
-              <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+            <button 
+              onClick={() => router.push('/meditar')}
+              className="flex flex-col items-center gap-3 text-white hover:opacity-80 transition-opacity"
+            >
+              <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors">
                 <span className="text-2xl md:text-3xl">🧘</span>
               </div>
               <span className="text-sm md:text-base font-medium">{t.meditate}</span>
@@ -712,12 +727,183 @@ export default function DashboardPage() {
               </div>
               <span className="text-sm md:text-base font-medium">{t.reset}</span>
             </button>
-            <button className="flex flex-col items-center gap-3 text-white hover:opacity-80 transition-opacity">
-              <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-                <MoreHorizontal className="h-6 w-6 md:h-8 md:w-8" />
-              </div>
-              <span className="text-sm md:text-base font-medium">{t.more}</span>
-            </button>
+            <div className="hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button 
+                  onClick={() => {
+                    const principalSection = document.getElementById('principal')
+                    if (principalSection) {
+                      principalSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }
+                  }}
+                  className="flex flex-col items-center gap-3 text-white hover:opacity-80 transition-opacity group"
+                >
+                  <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 hover:border-purple-400/50 hover:shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all duration-300 group-hover:scale-105">
+                    <MoreHorizontal className="h-6 w-6 md:h-8 md:w-8 group-hover:text-purple-300 transition-colors" />
+                  </div>
+                  <span className="text-sm md:text-base font-medium">{t.more}</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent 
+                align="end" 
+                className="dropdown-menu-no-scroll w-80 bg-gradient-to-br from-purple-950/98 via-indigo-950/98 to-blue-950/98 border-purple-500/30 backdrop-blur-xl text-white shadow-2xl shadow-purple-900/50 p-2 rounded-xl"
+              >
+                <div className="px-2 py-1.5 mb-1.5 border-b border-white/10 shrink-0">
+                  <DropdownMenuLabel className="text-base font-bold text-white px-0 mb-0.5">
+                    {language === "pt" ? "Mais Opções" : language === "es" ? "Más Opciones" : "More Options"}
+                  </DropdownMenuLabel>
+                  <p className="text-xs text-white/50">
+                    {language === "pt" ? "Acesso rápido a recursos" : language === "es" ? "Acceso rápido a recursos" : "Quick access to resources"}
+                  </p>
+                </div>
+                
+                <div className="space-y-0.5 overflow-y-auto max-h-[calc(70vh-120px)] pr-1 custom-scrollbar" style={{
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: 'rgba(139, 92, 246, 0.2) transparent'
+                }}>
+                  {/* Inspiração */}
+                  <DropdownMenuItem
+                    onClick={() => setIsReasonsDialogOpen(true)}
+                    className="text-white hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-rose-500/20 focus:bg-gradient-to-r focus:from-pink-500/20 focus:to-rose-500/20 cursor-pointer rounded-lg px-2.5 py-2 transition-all group/item"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-pink-500/30 to-rose-500/30 flex items-center justify-center mr-2.5 group-hover/item:scale-110 group-hover/item:shadow-lg group-hover/item:shadow-pink-500/30 transition-all shrink-0">
+                      <Heart className="h-4 w-4 text-pink-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-white">
+                        {language === "pt" ? "Motivos para Parar" : language === "es" ? "Razones para Parar" : "Reasons to Quit"}
+                      </div>
+                      <div className="text-xs text-white/50 mt-0.5 truncate">
+                        {language === "pt" ? "Lembre-se do porquê" : language === "es" ? "Recuerda el por qué" : "Remember why"}
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuItem
+                    onClick={() => setIsMotivationDialogOpen(true)}
+                    className="text-white hover:bg-gradient-to-r hover:from-yellow-500/20 hover:to-amber-500/20 focus:bg-gradient-to-r focus:from-yellow-500/20 focus:to-amber-500/20 cursor-pointer rounded-lg px-2.5 py-2 transition-all group/item"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-yellow-500/30 to-amber-500/30 flex items-center justify-center mr-2.5 group-hover/item:scale-110 group-hover/item:shadow-lg group-hover/item:shadow-yellow-500/30 transition-all shrink-0">
+                      <Quote className="h-4 w-4 text-yellow-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-white">
+                        {language === "pt" ? "Motivação" : language === "es" ? "Motivación" : "Motivation"}
+                      </div>
+                      <div className="text-xs text-white/50 mt-0.5 truncate">
+                        {language === "pt" ? "Citações inspiradoras" : language === "es" ? "Citas inspiradoras" : "Inspiring quotes"}
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuItem
+                    onClick={() => setIsSuccessStoriesDialogOpen(true)}
+                    className="text-white hover:bg-gradient-to-r hover:from-emerald-500/20 hover:to-green-500/20 focus:bg-gradient-to-r focus:from-emerald-500/20 focus:to-green-500/20 cursor-pointer rounded-lg px-2.5 py-2 transition-all group/item"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-emerald-500/30 to-green-500/30 flex items-center justify-center mr-2.5 group-hover/item:scale-110 group-hover/item:shadow-lg group-hover/item:shadow-emerald-500/30 transition-all shrink-0">
+                      <Star className="h-4 w-4 text-emerald-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-white">
+                        {language === "pt" ? "Histórias de Sucesso" : language === "es" ? "Historias de Éxito" : "Success Stories"}
+                      </div>
+                      <div className="text-xs text-white/50 mt-0.5 truncate">
+                        {language === "pt" ? "Inspire-se com outros" : language === "es" ? "Inspírate con otros" : "Get inspired"}
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+
+                  {/* Progresso */}
+                  <DropdownMenuItem
+                    onClick={() => setIsMilestonesDialogOpen(true)}
+                    className="text-white hover:bg-gradient-to-r hover:from-blue-500/20 hover:to-cyan-500/20 focus:bg-gradient-to-r focus:from-blue-500/20 focus:to-cyan-500/20 cursor-pointer rounded-lg px-2.5 py-2 transition-all group/item"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-blue-500/30 to-cyan-500/30 flex items-center justify-center mr-2.5 group-hover/item:scale-110 group-hover/item:shadow-lg group-hover/item:shadow-blue-500/30 transition-all shrink-0">
+                      <Award className="h-4 w-4 text-blue-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-white">
+                        {language === "pt" ? "Marcos e Conquistas" : language === "es" ? "Hitos y Logros" : "Milestones & Achievements"}
+                      </div>
+                      <div className="text-xs text-white/50 mt-0.5 truncate">
+                        {language === "pt" ? "Celebre suas vitórias" : language === "es" ? "Celebra tus victorias" : "Celebrate victories"}
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuItem
+                    onClick={() => setIsSideEffectsDialogOpen(true)}
+                    className="text-white hover:bg-gradient-to-r hover:from-purple-500/20 hover:to-indigo-500/20 focus:bg-gradient-to-r focus:from-purple-500/20 focus:to-indigo-500/20 cursor-pointer rounded-lg px-2.5 py-2 transition-all group/item"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-purple-500/30 to-indigo-500/30 flex items-center justify-center mr-2.5 group-hover/item:scale-110 group-hover/item:shadow-lg group-hover/item:shadow-purple-500/30 transition-all shrink-0">
+                      <AlertCircle className="h-4 w-4 text-purple-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-white">
+                        {language === "pt" ? "Efeitos Colaterais" : language === "es" ? "Efectos Secundarios" : "Side Effects"}
+                      </div>
+                      <div className="text-xs text-white/50 mt-0.5 truncate">
+                        {language === "pt" ? "Benefícios da recuperação" : language === "es" ? "Beneficios de la recuperación" : "Recovery benefits"}
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+
+                  {/* Navegação */}
+                  <DropdownMenuItem
+                    onClick={() => router.push('/tools')}
+                    className="text-white hover:bg-gradient-to-r hover:from-teal-500/20 hover:to-cyan-500/20 focus:bg-gradient-to-r focus:from-teal-500/20 focus:to-cyan-500/20 cursor-pointer rounded-lg px-2.5 py-2 transition-all group/item"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-teal-500/30 to-cyan-500/30 flex items-center justify-center mr-2.5 group-hover/item:scale-110 group-hover/item:shadow-lg group-hover/item:shadow-teal-500/30 transition-all shrink-0">
+                      <Wind className="h-4 w-4 text-teal-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-white">
+                        {language === "pt" ? "Ferramentas" : language === "es" ? "Herramientas" : "Tools"}
+                      </div>
+                      <div className="text-xs text-white/50 mt-0.5 truncate">
+                        {language === "pt" ? "Exercícios e recursos" : language === "es" ? "Ejercicios y recursos" : "Exercises & resources"}
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuItem
+                    onClick={() => router.push('/analytics')}
+                    className="text-white hover:bg-gradient-to-r hover:from-violet-500/20 hover:to-purple-500/20 focus:bg-gradient-to-r focus:from-violet-500/20 focus:to-purple-500/20 cursor-pointer rounded-lg px-2.5 py-2 transition-all group/item"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-violet-500/30 to-purple-500/30 flex items-center justify-center mr-2.5 group-hover/item:scale-110 group-hover/item:shadow-lg group-hover/item:shadow-violet-500/30 transition-all shrink-0">
+                      <Target className="h-4 w-4 text-violet-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-white">
+                        {language === "pt" ? "Análises" : language === "es" ? "Análisis" : "Analytics"}
+                      </div>
+                      <div className="text-xs text-white/50 mt-0.5 truncate">
+                        {language === "pt" ? "Estatísticas e gráficos" : language === "es" ? "Estadísticas y gráficos" : "Stats & charts"}
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuItem
+                    onClick={() => router.push('/community')}
+                    className="text-white hover:bg-gradient-to-r hover:from-indigo-500/20 hover:to-blue-500/20 focus:bg-gradient-to-r focus:from-indigo-500/20 focus:to-blue-500/20 cursor-pointer rounded-lg px-2.5 py-2 transition-all group/item"
+                  >
+                    <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-indigo-500/30 to-blue-500/30 flex items-center justify-center mr-2.5 group-hover/item:scale-110 group-hover/item:shadow-lg group-hover/item:shadow-indigo-500/30 transition-all shrink-0">
+                      <Users className="h-4 w-4 text-indigo-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-white">
+                        {language === "pt" ? "Comunidade" : language === "es" ? "Comunidad" : "Community"}
+                      </div>
+                      <div className="text-xs text-white/50 mt-0.5 truncate">
+                        {language === "pt" ? "Conecte-se com outros" : language === "es" ? "Conéctate con otros" : "Connect with others"}
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            </div>
           </div>
 
           {/* Brain Rewiring Progress */}
@@ -1159,7 +1345,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Main Menu Section */}
-          <div className="space-y-4 mb-6 mt-12">
+          <div id="principal" className="space-y-4 mb-6 mt-12">
             <h3 className="text-lg font-semibold text-white">{t.main}</h3>
             
             <div className="space-y-2">
@@ -2125,6 +2311,147 @@ export default function DashboardPage() {
                   ? "💛 Cada una de estas personas comenzó exactamente donde estás ahora. Enfrentaron los mismos desafíos, tuvieron las mismas dudas y, a menudo, pensaron en rendirse. Pero continuaron, un día a la vez, y hoy celebran su libertad. Tú también puedes hacerlo. ¡Sigue firme en tu viaje - tu historia de éxito se está escribiendo ahora mismo!"
                   : "💛 Each of these people started exactly where you are now. They faced the same challenges, had the same doubts, and often thought about giving up. But they continued, one day at a time, and today they celebrate their freedom. You can do it too. Stay strong on your journey - your success story is being written right now!"}
               </p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Compromisso */}
+      <Dialog open={isPledgeDialogOpen} onOpenChange={setIsPledgeDialogOpen}>
+        <DialogContent className="bg-gradient-to-br from-red-950/95 to-orange-950/95 border-white/20 backdrop-blur-xl text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white text-xl font-bold flex items-center gap-2">
+              <span className="text-2xl">🛑</span>
+              {t.pledge}
+            </DialogTitle>
+            <DialogDescription className="text-white/70 text-sm mt-2">
+              {language === "pt" 
+                ? "Renove seu compromisso e lembre-se dos motivos pelos quais você está nesta jornada."
+                : language === "es"
+                ? "Renueva tu compromiso y recuerda las razones por las que estás en este viaje."
+                : "Renew your commitment and remember the reasons why you're on this journey."}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 mt-4">
+            {/* Seção de Motivos */}
+            <div className="space-y-3">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Heart className="h-5 w-5 text-pink-400" />
+                {language === "pt" ? "Meu Compromisso" : language === "es" ? "Mi Compromiso" : "My Commitment"}
+              </h3>
+              
+              {isEditingReason ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={quittingReason}
+                    onChange={(e) => setQuittingReason(e.target.value)}
+                    placeholder={t.addReasonPlaceholder}
+                    className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/50 text-sm min-h-[120px] resize-none focus:outline-none focus:ring-2 focus:ring-pink-400/50 focus:border-pink-400/50"
+                    autoFocus
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        setIsEditingReason(false)
+                        if (quittingReason.trim()) {
+                          await saveQuittingReason()
+                        }
+                      }}
+                      className="text-sm text-pink-400 hover:text-pink-300 transition-colors px-4 py-2 rounded-lg hover:bg-pink-400/10 bg-pink-400/5 font-medium"
+                    >
+                      {isSavingReason ? (language === "pt" ? "Salvando..." : language === "es" ? "Guardando..." : "Saving...") : (language === "pt" ? "Salvar" : language === "es" ? "Guardar" : "Save")}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingReason(false)
+                      }}
+                      className="text-sm text-white/50 hover:text-white/70 transition-colors px-4 py-2 rounded-lg hover:bg-white/5 font-medium"
+                    >
+                      {language === "pt" ? "Cancelar" : language === "es" ? "Cancelar" : "Cancel"}
+                    </button>
+                    {reasonSaved && (
+                      <span className={`text-xs flex items-center gap-1 animate-in fade-in ${
+                        savedInDatabase ? "text-green-400" : "text-yellow-400"
+                      }`}>
+                        <Check className="h-3 w-3" />
+                        {savedInDatabase 
+                          ? (language === "pt" ? "Salvo no banco" : language === "es" ? "Guardado en BD" : "Saved to database")
+                          : (language === "pt" ? "Salvo localmente" : language === "es" ? "Guardado localmente" : "Saved locally")
+                        }
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div 
+                  onClick={() => setIsEditingReason(true)}
+                  className="bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white/70 text-sm cursor-pointer hover:text-white hover:bg-white/15 transition-colors min-h-[120px] whitespace-pre-wrap break-words"
+                >
+                  {quittingReason || (
+                    <span className="italic text-white/50">{t.addReasonPlaceholder}</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Estatísticas do Compromisso */}
+            <div className="bg-gradient-to-br from-red-500/20 to-orange-500/20 border border-red-400/30 rounded-lg p-4 space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Target className="h-5 w-5 text-red-400" />
+                <h4 className="font-semibold text-white">
+                  {language === "pt" ? "Sua Jornada" : language === "es" ? "Tu Viaje" : "Your Journey"}
+                </h4>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                  <div className="text-xs text-white/60 mb-1">
+                    {language === "pt" ? "Dias Limpos" : language === "es" ? "Días Limpios" : "Days Clean"}
+                  </div>
+                  <div className="text-2xl font-bold text-red-300">
+                    {userProgress.totalDaysClean || userProgress.currentStreak || 0}
+                  </div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                  <div className="text-xs text-white/60 mb-1">
+                    {language === "pt" ? "Sequência Atual" : language === "es" ? "Racha Actual" : "Current Streak"}
+                  </div>
+                  <div className="text-2xl font-bold text-orange-300">
+                    {userProgress.currentStreak || 0}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Mensagem Motivacional */}
+            <div className="bg-gradient-to-br from-pink-500/20 to-purple-500/20 border border-pink-400/30 rounded-lg p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <Flame className="h-5 w-5 text-pink-400" />
+                <h4 className="font-semibold text-white">
+                  {language === "pt" ? "Lembre-se" : language === "es" ? "Recuerda" : "Remember"}
+                </h4>
+              </div>
+              <p className="text-sm text-white/90 leading-relaxed">
+                {language === "pt" 
+                  ? "💪 Cada dia que você permanece fiel ao seu compromisso é uma vitória. Você é mais forte do que imagina e está mais perto da liberdade do que nunca. Continue firme, um dia de cada vez."
+                  : language === "es"
+                  ? "💪 Cada día que permaneces fiel a tu compromiso es una victoria. Eres más fuerte de lo que imaginas y estás más cerca de la libertad que nunca. Sigue firme, un día a la vez."
+                  : "💪 Every day you stay true to your commitment is a victory. You are stronger than you think and closer to freedom than ever. Stay strong, one day at a time."}
+              </p>
+            </div>
+
+            {/* Botão para Ver Motivos Completos */}
+            <div className="flex justify-center pt-2">
+              <button
+                onClick={() => {
+                  setIsPledgeDialogOpen(false)
+                  setIsReasonsDialogOpen(true)
+                }}
+                className="text-sm text-pink-400 hover:text-pink-300 transition-colors px-4 py-2 rounded-lg hover:bg-pink-400/10 bg-pink-400/5 font-medium flex items-center gap-2"
+              >
+                <Heart className="h-4 w-4" />
+                {language === "pt" ? "Ver Detalhes dos Motivos" : language === "es" ? "Ver Detalles de las Razones" : "View Reasons Details"}
+              </button>
             </div>
           </div>
         </DialogContent>
