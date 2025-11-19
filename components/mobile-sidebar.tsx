@@ -1,13 +1,15 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, TrendingUp, Wrench, Users, Target, User, Sparkles, X, Bot, ListChecks } from "lucide-react"
+import { LayoutDashboard, TrendingUp, Wrench, Users, Target, User, Sparkles, X, Bot, ListChecks, Shield } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/lib/language-context"
 import { translations } from "@/lib/translations"
 import { LanguageSwitcher } from "./language-switcher"
 import { ThemeToggle } from "./theme-toggle"
+import { supabase } from "@/lib/supabase/client"
 
 interface MobileSidebarProps {
   isOpen: boolean
@@ -18,6 +20,31 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const pathname = usePathname()
   const { language, setLanguage } = useLanguage()
   const t = translations[language]
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    checkAdminStatus()
+  }, [])
+
+  const checkAdminStatus = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_pro")
+          .eq("id", user.id)
+          .single()
+
+        setIsAdmin(profile?.is_pro || false)
+      }
+    } catch (error) {
+      console.error("Error checking admin status:", error)
+    }
+  }
 
   const navigation = [
     { name: t.dashboard, href: "/dashboard", icon: LayoutDashboard },
@@ -28,6 +55,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
     { name: t.community, href: "/community", icon: Users },
     { name: t.tony, href: "/tony", icon: Bot },
     { name: t.profile, href: "/profile", icon: User },
+    ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
   ]
 
   return (

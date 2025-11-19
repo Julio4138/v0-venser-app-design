@@ -25,7 +25,8 @@ import {
   Bot,
   Eye,
   Diamond,
-  ArrowLeft
+  ArrowLeft,
+  MessageSquare
 } from "lucide-react"
 import Link from "next/link"
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
@@ -437,6 +438,30 @@ export default function AdminDashboard() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-cyan-600 font-medium">
+                    <span>Acessar</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </div>
+                </div>
+              </Card>
+            </Link>
+
+            {/* Gerenciar Comunidade */}
+            <Link href="/admin/community">
+              <Card className="p-6 hover:shadow-xl transition-all cursor-pointer border-2 hover:border-pink-500 group h-full">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <MessageSquare className="h-7 w-7 text-white" />
+                    </div>
+                    <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-pink-500 group-hover:translate-x-1 transition-all" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-lg mb-1">Gerenciar Comunidade</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Modere posts, usuários e gerencie a comunidade
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-pink-600 font-medium">
                     <span>Acessar</span>
                     <ArrowRight className="h-4 w-4" />
                   </div>

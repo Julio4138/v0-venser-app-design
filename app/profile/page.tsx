@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Sparkles, Settings, Crown, LogOut, User, Lock, Globe, Upload, X, Camera } from "lucide-react"
+import { Sparkles, Settings, Crown, LogOut, User, Lock, Globe, Upload, X, Camera, Award } from "lucide-react"
 import { useSidebar } from "@/lib/sidebar-context"
 import { cn } from "@/lib/utils"
 import { supabase } from "@/lib/supabase/client"
@@ -47,11 +47,35 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [medals, setMedals] = useState<Array<{ medal_type: string; earned_at: string }>>([])
 
   // Load profile data
   useEffect(() => {
     loadProfileData()
+    loadMedals()
   }, [])
+  
+  const loadMedals = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      const { data: medalsData } = await supabase
+        .from("user_medals")
+        .select("medal_type, earned_at")
+        .eq("user_id", user.id)
+        .order("earned_at", { ascending: false })
+
+      if (medalsData) {
+        setMedals(medalsData)
+      }
+    } catch (error) {
+      console.error("Error loading medals:", error)
+    }
+  }
 
   // Load profile when settings dialog opens
   useEffect(() => {
@@ -520,6 +544,36 @@ export default function ProfilePage() {
                     <p className="text-sm md:text-base text-foreground leading-relaxed whitespace-pre-wrap">
                       {profileData.biography}
                     </p>
+                  </div>
+                )}
+                
+                {/* Medalhas */}
+                {medals.length > 0 && (
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex flex-wrap gap-3 justify-center">
+                      {medals.map((medal, index) => (
+                        <div
+                          key={index}
+                          className="flex flex-col items-center gap-2 p-3 rounded-lg bg-gradient-to-br from-[oklch(0.54_0.18_285)]/20 to-[oklch(0.7_0.15_220)]/20 border border-[oklch(0.54_0.18_285)]/30"
+                        >
+                          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] flex items-center justify-center venser-glow">
+                            <Award className="h-6 w-6 text-white" />
+                          </div>
+                          <p className="text-xs font-semibold text-center">
+                            {medal.medal_type === "anonymous_supporter_100"
+                              ? language === "pt"
+                                ? "100 Suportes Anônimos"
+                                : "100 Anonymous Supports"
+                              : medal.medal_type}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {new Date(medal.earned_at).toLocaleDateString(
+                              language === "pt" ? "pt-BR" : language === "es" ? "es-ES" : "en-US"
+                            )}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
