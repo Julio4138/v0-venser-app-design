@@ -11,6 +11,13 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Flame, Check, Lock, Trophy, Star, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/lib/sidebar-context"
@@ -83,25 +90,40 @@ export default function ProgramPage() {
   const [isCompleting, setIsCompleting] = useState(false)
   const [hasCompletedToday, setHasCompletedToday] = useState(false)
 
-  // Load user progress and program days
+  // Load user's selected duration first, then load data
   useEffect(() => {
-    loadUserData()
-  }, [])
-
-  // Load user's selected duration
-  useEffect(() => {
-    loadUserDuration()
+    const loadInitialData = async () => {
+      // Carregar duração primeiro e aguardar o valor
+      const loadedDuration = await loadUserDuration()
+      // Se encontrou uma duração no banco, garantir que selectedDuration está atualizado
+      if (loadedDuration) {
+        setSelectedDuration(loadedDuration)
+      }
+      // Após carregar a duração, carregar os dados do usuário passando a duração carregada
+      await loadUserData(loadedDuration || undefined)
+      // Marcar como carregamento inicial completo após tudo estar carregado
+      setIsInitialLoad(false)
+    }
+    loadInitialData()
   }, [])
 
   // Update duration and reload data when duration changes (skip initial load)
   useEffect(() => {
     if (!isInitialLoad && selectedDuration) {
+      // Atualizar estado local imediatamente para refletir na UI
+      setUserProgress((prev) => ({
+        ...prev,
+        totalDays: selectedDuration,
+      }))
+      
       const updateAndReload = async () => {
+        console.log("Saving program duration:", selectedDuration)
+        // Salvar primeiro e aguardar confirmação
         await updateUserDuration()
-        // Small delay to ensure database update completes
-        setTimeout(() => {
-          loadUserData()
-        }, 300)
+        // Aguardar um pouco mais para garantir que o banco foi atualizado
+        await new Promise(resolve => setTimeout(resolve, 500))
+        // Recarregar dados
+        await loadUserData(selectedDuration)
       }
       updateAndReload()
     }
@@ -146,31 +168,44 @@ export default function ProgramPage() {
     return () => clearTimeout(timeoutId)
   }, [reflectionText, selectedDay, programDays])
 
-  const loadUserDuration = async () => {
+  const loadUserDuration = async (): Promise<number | null> => {
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser()
 
-      if (!user) return
+      if (!user) return null
 
-      const { data: progress } = await supabase
+      const { data: progress, error } = await supabase
         .from("user_progress")
         .select("program_duration")
         .eq("user_id", user.id)
         .single()
 
+      if (error) {
+        // PGRST116 = no rows returned, which is OK for new users
+        if (error.code !== 'PGRST116') {
+          console.error("Error loading user duration:", error)
+        }
+        return null
+      }
+
       if (progress?.program_duration) {
-        setSelectedDuration(progress.program_duration)
+        const duration = progress.program_duration
+        console.log("Loaded program duration from database:", duration)
+        setSelectedDuration(duration)
         setUserProgress((prev) => ({
           ...prev,
-          totalDays: progress.program_duration,
+          totalDays: duration,
         }))
+        return duration
+      } else {
+        console.log("No program_duration found in database, using default 90")
       }
-      setIsInitialLoad(false)
+      return null
     } catch (error) {
       console.error("Error loading user duration:", error)
-      setIsInitialLoad(false)
+      return null
     }
   }
 
@@ -180,20 +215,51 @@ export default function ProgramPage() {
         data: { user },
       } = await supabase.auth.getUser()
 
-      if (!user) return
+      if (!user) {
+        console.error("No user found for updating duration")
+        return
+      }
 
-      await supabase
+      // Usar upsert com onConflict para garantir que atualize o registro existente
+      const { data, error } = await supabase
         .from("user_progress")
-        .upsert({
-          user_id: user.id,
-          program_duration: selectedDuration,
-        })
+        .upsert(
+          {
+            user_id: user.id,
+            program_duration: selectedDuration,
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: 'user_id',
+          }
+        )
+        .select()
+
+      if (error) {
+        console.error("Error updating user duration:", error)
+        toast.error(
+          language === "pt"
+            ? "Erro ao salvar duração do programa"
+            : "Error saving program duration"
+        )
+        return
+      }
+
+      // Verificar se foi salvo corretamente
+      if (data && data.length > 0) {
+        console.log("Program duration saved successfully:", data[0].program_duration)
+      }
     } catch (error) {
       console.error("Error updating user duration:", error)
+      toast.error(
+        language === "pt"
+          ? "Erro ao salvar duração do programa"
+          : "Error saving program duration"
+      )
     }
   }
 
-  const loadUserData = async () => {
+  const loadUserData = async (durationOverride?: number) => {
     try {
       const {
         data: { user },
@@ -212,13 +278,25 @@ export default function ProgramPage() {
         .single()
 
       if (progress) {
-        const duration = progress.program_duration || selectedDuration || 90
+        // Usar durationOverride se fornecido (para garantir valor correto na primeira carga)
+        // Senão usar selectedDuration se já foi carregado, senão usar program_duration do banco
+        const duration = durationOverride || selectedDuration || progress.program_duration || 90
         setUserProgress({
           currentDay: progress.current_day || 1,
           totalDays: duration,
           currentStreak: progress.current_streak || 0,
           totalXp: progress.total_xp || 0,
         })
+        // Se selectedDuration ainda não foi definido e há program_duration no banco, usar esse valor
+        if (!selectedDuration && progress.program_duration) {
+          setSelectedDuration(progress.program_duration)
+        }
+      } else {
+        // Se não houver progresso, usar selectedDuration ou padrão
+        setUserProgress((prev) => ({
+          ...prev,
+          totalDays: selectedDuration || 90,
+        }))
       }
 
       // Check if user completed a day today
@@ -235,7 +313,8 @@ export default function ProgramPage() {
       setHasCompletedToday((todayCompletion?.length || 0) > 0)
 
       // Load program days for selected duration
-      const duration = progress?.program_duration || selectedDuration || 90
+      // Usar durationOverride se fornecido, senão usar selectedDuration se já foi carregado, senão usar program_duration do banco
+      const duration = durationOverride || selectedDuration || progress?.program_duration || 90
       const { data: days } = await supabase
         .from("program_days")
         .select("*")
@@ -664,7 +743,8 @@ export default function ProgramPage() {
 
   // Generate week groups based on selected duration
   const weeks = []
-  const totalDays = userProgress.totalDays || selectedDuration || 90
+  // Sempre usar selectedDuration como prioridade, pois é o valor mais atual selecionado pelo usuário
+  const totalDays = selectedDuration || userProgress.totalDays || 90
   for (let i = 0; i < totalDays; i += 7) {
     const weekDays = []
     for (let j = 1; j <= 7 && i + j <= totalDays; j++) {
@@ -835,11 +915,17 @@ export default function ProgramPage() {
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex-1">
-                  <h1 className="text-2xl md:text-3xl font-bold">{t.dayJourney}</h1>
+                  <h1 className="text-2xl md:text-3xl font-bold">
+                    {language === "pt"
+                      ? `Jornada de ${selectedDuration} Dias`
+                      : language === "es"
+                      ? `Viaje de ${selectedDuration} Días`
+                      : `${selectedDuration}-Day Journey`}
+                  </h1>
                   <p className="text-sm text-muted-foreground mt-1">
                     {language === "pt"
-                      ? `Sua jornada de transformação em ${userProgress.totalDays} dias`
-                      : `Your ${userProgress.totalDays}-day transformation journey`}
+                      ? `Sua jornada de transformação em ${selectedDuration} dias`
+                      : `Your ${selectedDuration}-day transformation journey`}
                   </p>
                 </div>
                 
@@ -848,24 +934,41 @@ export default function ProgramPage() {
                   <label className="text-xs font-medium text-muted-foreground">
                     {language === "pt" ? "Duração da Jornada" : "Journey Duration"}
                   </label>
-                  <div className="flex flex-wrap gap-2">
-                    {programDurations.map((duration) => (
-                      <Button
-                        key={duration}
-                        variant={selectedDuration === duration ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setSelectedDuration(duration)}
-                        className={cn(
-                          "transition-all",
-                          selectedDuration === duration
-                            ? "bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] text-white border-0 shadow-lg"
-                            : "hover:bg-accent"
-                        )}
-                      >
-                        {duration} {language === "pt" ? "dias" : "days"}
-                      </Button>
-                    ))}
-                  </div>
+                  <Select
+                    value={selectedDuration.toString()}
+                    onValueChange={(value) => setSelectedDuration(Number(value))}
+                  >
+                    <SelectTrigger 
+                      className={cn(
+                        "w-full sm:w-[180px]",
+                        selectedDuration === 90 && "border-[oklch(0.54_0.18_285)] bg-gradient-to-r from-[oklch(0.54_0.18_285)]/5 to-[oklch(0.7_0.15_220)]/5"
+                      )}
+                    >
+                      <SelectValue placeholder={language === "pt" ? "Selecione a duração" : "Select duration"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {programDurations.map((duration) => {
+                        const durationText = `${duration} ${language === "pt" ? "dias" : "days"}`
+                        return (
+                          <SelectItem 
+                            key={duration} 
+                            value={duration.toString()}
+                            textValue={durationText}
+                            className={duration === 90 ? "bg-gradient-to-r from-[oklch(0.54_0.18_285)]/10 to-[oklch(0.7_0.15_220)]/10 text-[oklch(0.54_0.18_285)] font-semibold" : ""}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span>{durationText}</span>
+                              {duration === 90 && (
+                                <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] text-white">
+                                  {language === "pt" ? "recomendado" : language === "es" ? "recomendado" : "recommended"}
+                                </span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
@@ -965,6 +1068,7 @@ export default function ProgramPage() {
                     status={dayData.status}
                     streak={dayData.status === "current" && userProgress.currentStreak >= 7}
                     onClick={() => handleDayClick(dayData.day)}
+                    language={language}
                   />
                 ))}
               </div>

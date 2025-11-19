@@ -9,9 +9,10 @@ interface DayCardProps {
   status: "completed" | "current" | "locked"
   onClick?: () => void
   streak?: boolean
+  language?: "pt" | "en" | "es"
 }
 
-export function DayCard({ day, status, onClick, streak }: DayCardProps) {
+export function DayCard({ day, status, onClick, streak, language = "pt" }: DayCardProps) {
   const isClickable = status === "current" || status === "completed"
 
   return (
@@ -55,7 +56,7 @@ export function DayCard({ day, status, onClick, streak }: DayCardProps) {
 
         <div className="text-center">
           <p className="text-sm font-medium">
-            {"Day"} {day}
+            {language === "pt" ? "Dia" : language === "es" ? "Día" : "Day"} {day}
           </p>
         </div>
       </div>
