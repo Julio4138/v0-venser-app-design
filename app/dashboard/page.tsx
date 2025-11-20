@@ -14,7 +14,7 @@ import { translations } from "@/lib/translations"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
-import { Hand, Brain, RotateCcw, MoreHorizontal, Sparkles, AlertCircle, Check, X, Minus, Cloud, Plus, Flower2, Bell, TreePine, MessageCircle, Globe, SquarePlus, Circle, HelpCircle, Star, ChevronRight, Heart, BookOpen, Smile, Users, Target, RotateCw, ClipboardList, Wind, Award, Quote, Flame, Play, Pause, Copy, Share2 } from "lucide-react"
+import { Hand, Brain, RotateCcw, MoreHorizontal, Sparkles, AlertCircle, Check, X, Minus, Cloud, Plus, Flower2, Bell, TreePine, MessageCircle, Globe, SquarePlus, Circle, HelpCircle, Star, ChevronRight, Heart, BookOpen, Smile, Users, Target, RotateCw, ClipboardList, Wind, Award, Quote, Flame, Play, Pause, Copy, Share2, Bot } from "lucide-react"
 import { PeacefulAnimation } from "@/components/peaceful-animation"
 import { TreeForest } from "@/components/tree-forest"
 import { useTreeProgress } from "@/lib/use-tree-progress"
@@ -48,6 +48,7 @@ export default function DashboardPage() {
     currentStreak: 0,
     totalXp: 0,
     totalDaysClean: 0,
+    programDuration: 90, // Duração padrão, será carregada do banco
   })
   const [isLoading, setIsLoading] = useState(true)
   const [quittingReason, setQuittingReason] = useState(() => {
@@ -181,8 +182,9 @@ export default function DashboardPage() {
     fetchChallengeEndDate()
   }, [startDate, displayStartDate])
   
-  // Calcular progresso do cérebro baseado no dia atual
-  const brainProgress = Math.min((userProgress.currentDay / 90) * 100, 100)
+  // Calcular progresso do cérebro baseado no dia atual e duração do programa
+  const programDuration = userProgress.programDuration || 90
+  const brainProgress = Math.min((userProgress.currentDay / programDuration) * 100, 100)
   
   // Analytics data
   const analyticsData = [60, 65, 70, 68, 75, 80, 82, 78, 85, 88, 85, 90]
@@ -232,7 +234,14 @@ export default function DashboardPage() {
           currentStreak: progress.current_streak || 0,
           totalXp: progress.total_xp || 0,
           totalDaysClean: progress.total_days_clean || 0,
+          programDuration: progress.program_duration || 90, // Carregar duração do programa
         })
+      } else {
+        // Se não houver progresso, manter duração padrão
+        setUserProgress((prev) => ({
+          ...prev,
+          programDuration: 90,
+        }))
       }
 
       // Buscar data de início e motivo (primeiro dia completado ou data de criação do perfil)
@@ -679,7 +688,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Target className="h-4 w-4 text-[oklch(0.68_0.18_45)]" />
-                <span>{userProgress.currentDay}/90 {t.program}</span>
+                <span>{userProgress.currentDay}/{userProgress.programDuration || 90} {t.program}</span>
               </div>
             </div>
           </div>
@@ -704,7 +713,7 @@ export default function DashboardPage() {
               className="flex flex-col items-center gap-3 text-white hover:opacity-80 transition-opacity"
             >
               <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors">
-                <span className="text-2xl md:text-3xl">🛑</span>
+                <span className="text-2xl md:text-3xl">🤝</span>
               </div>
               <span className="text-sm md:text-base font-medium">{t.pledge}</span>
             </button>
@@ -919,7 +928,7 @@ export default function DashboardPage() {
               />
             </div>
             <div className="flex items-center justify-between text-xs text-white/50">
-              <span>{t.program}: {userProgress.currentDay}/90</span>
+              <span>{t.program}: {userProgress.currentDay}/{userProgress.programDuration || 90}</span>
               <span>{language === "pt" ? "Dias Limpos" : "Days Clean"}: {userProgress.totalDaysClean}</span>
             </div>
           </div>
@@ -1029,14 +1038,48 @@ export default function DashboardPage() {
             <div className="relative">
               <Card 
                 onClick={() => router.push("/tony")}
-                className="p-6 bg-gradient-to-br from-blue-900 to-indigo-900 border-white/10 hover:border-blue-400/50 transition-all cursor-pointer group overflow-hidden min-h-[120px]"
+                className="relative p-6 bg-gradient-to-br from-emerald-900/90 via-teal-900/90 to-cyan-900/90 border-white/10 hover:border-emerald-400/50 transition-all duration-300 cursor-pointer group overflow-hidden min-h-[140px] hover:shadow-xl hover:shadow-emerald-500/20"
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center group-hover:bg-white/90 transition-colors shadow-md">
-                    <Plus className="h-6 w-6 text-blue-900" />
-                  </div>
-                  <span className="text-white font-semibold text-lg">{t.newSession}</span>
+                {/* Decorative background elements */}
+                <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity duration-300">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full blur-3xl transform translate-x-8 -translate-y-8"></div>
+                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald-300 rounded-full blur-2xl transform -translate-x-6 translate-y-6"></div>
                 </div>
+                
+                <div className="relative z-10 flex flex-col gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="relative">
+                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-400 flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg shadow-emerald-500/30">
+                        <Bot className="h-7 w-7 text-white" />
+                      </div>
+                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-400 rounded-full border-2 border-emerald-900 flex items-center justify-center group-hover:animate-pulse">
+                        <Sparkles className="h-3 w-3 text-white" />
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-white font-bold text-xl group-hover:text-emerald-100 transition-colors">{t.newSession}</h3>
+                        <span className="px-2.5 py-0.5 text-xs font-semibold bg-emerald-500/20 text-emerald-200 rounded-full border border-emerald-400/30">
+                          {t.therapeuticAI}
+                        </span>
+                      </div>
+                      <p className="text-sm text-white/80 leading-relaxed">
+                        {t.tonyDescription}
+                      </p>
+                    </div>
+                    
+                    <ChevronRight className="h-5 w-5 text-white/60 group-hover:text-emerald-300 group-hover:translate-x-1 transition-all duration-300 shrink-0 mt-1" />
+                  </div>
+                  
+                  <div className="flex items-center gap-2 text-xs text-white/60">
+                    <Heart className="h-3.5 w-3.5 text-emerald-400" />
+                    <span>{t.tonyFeatures}</span>
+                  </div>
+                </div>
+                
+                {/* Shimmer effect on hover */}
+                <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
               </Card>
             </div>
           </div>
@@ -1810,7 +1853,7 @@ export default function DashboardPage() {
               <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min((userProgress.totalDaysClean || userProgress.currentStreak) / 90 * 100, 100)}%` }}
+                  style={{ width: `${Math.min((userProgress.totalDaysClean || userProgress.currentStreak) / (userProgress.programDuration || 90) * 100, 100)}%` }}
                 />
               </div>
             </div>
@@ -2321,7 +2364,7 @@ export default function DashboardPage() {
         <DialogContent className="bg-gradient-to-br from-red-950/95 to-orange-950/95 border-white/20 backdrop-blur-xl text-white max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white text-xl font-bold flex items-center gap-2">
-              <span className="text-2xl">🛑</span>
+              <span className="text-2xl">🤝</span>
               {t.pledge}
             </DialogTitle>
             <DialogDescription className="text-white/70 text-sm mt-2">
