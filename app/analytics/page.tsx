@@ -51,16 +51,22 @@ export default function AnalyticsPage() {
   const [plannerMetrics, setPlannerMetrics] = useState<PlannerMetrics | null>(null)
   const [isLoadingPlanner, setIsLoadingPlanner] = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  
+  // Real data states
+  const [recoveryScore, setRecoveryScore] = useState(0)
+  const [mentalClarity, setMentalClarity] = useState(0)
+  const [energyLevel, setEnergyLevel] = useState(0)
+  const [moodData, setMoodData] = useState<number[]>([])
+  const [productivityData, setProductivityData] = useState<number[]>([])
+  const [moodLabels, setMoodLabels] = useState<string[]>([])
+  const [productivityLabels, setProductivityLabels] = useState<string[]>([])
+  const [moodUpdatesPerDay, setMoodUpdatesPerDay] = useState<number[]>([])
+  const [productivityUpdatesPerDay, setProductivityUpdatesPerDay] = useState<number[]>([])
+  const [moodHourDistribution, setMoodHourDistribution] = useState<Record<number, number>>({})
+  const [productivityHourDistribution, setProductivityHourDistribution] = useState<Record<number, number>>({})
 
-  // Demo data
-  const recoveryScore = 78
-  const consecutiveDays = treeProgress.currentStreak || 14
-  const personalRecord = treeProgress.longestStreak || 21
-  const mentalClarity = 85
-  const energyLevel = 72
-
-  const moodData = [60, 65, 70, 68, 75, 80, 82]
-  const productivityData = [55, 62, 68, 71, 75, 78, 82]
+  const consecutiveDays = treeProgress.currentStreak || 0
+  const personalRecord = treeProgress.longestStreak || 0
 
   const milestones = [
     { id: 1, title: t.firstWeek, days: 7, achieved: true },
@@ -69,9 +75,209 @@ export default function AnalyticsPage() {
     { id: 4, title: t.threeMonths, days: 90, achieved: false },
   ]
 
+  // Helper function to convert mood emoji to numeric value (1-5 scale)
+  const moodEmojiToValue = (emoji: string | null): number => {
+    if (!emoji) return 3 // Neutral
+    const moodMap: Record<string, number> = {
+      '😞': 1, // Sad
+      '😐': 2, // Neutral
+      '🙂': 3, // Slightly happy
+      '😊': 4, // Happy
+      '😄': 5, // Very happy
+      '😢': 1,
+      '😕': 2,
+      '😌': 3,
+      '😁': 5,
+    }
+    return moodMap[emoji] || 3
+  }
+
+  // Helper function to convert mood value (1-5) to percentage (0-100)
+  const moodValueToPercentage = (value: number): number => {
+    return ((value - 1) / 4) * 100
+  }
+
+  // Load analytics data (mood, productivity, recovery metrics)
+  const loadAnalyticsData = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      // Calculate date range based on period
+      const now = new Date()
+      let startDate: Date
+      if (period === "week") {
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      } else if (period === "month") {
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      } else {
+        startDate = new Date(0) // All time
+      }
+
+      // Get planner entries for mood and productivity with timestamps
+      const { data: plannerEntries, error } = await supabase
+        .from("daily_planner")
+        .select("planner_date, mood, tasks, created_at, updated_at")
+        .eq("user_id", user.id)
+        .gte("planner_date", startDate.toISOString().split("T")[0])
+        .order("planner_date", { ascending: true })
+
+      if (error) throw error
+
+      if (!plannerEntries || plannerEntries.length === 0) {
+        setMoodData([])
+        setProductivityData([])
+        setRecoveryScore(0)
+        setMentalClarity(0)
+        setEnergyLevel(0)
+        return
+      }
+
+      // Calculate days to show (last 7 days for trends)
+      const daysToShow = 7
+      const today = new Date()
+      const moodTrend: number[] = []
+      const productivityTrend: number[] = []
+      const moodLabelsArray: string[] = []
+      const productivityLabelsArray: string[] = []
+      const moodUpdatesCount: number[] = []
+      const productivityUpdatesCount: number[] = []
+      const moodHours: Record<number, number> = {}
+      const productivityHours: Record<number, number> = {}
+
+      // Count updates per day and hour distribution
+      // Note: daily_planner has UNIQUE(user_id, planner_date), so one entry per day
+      // But we can track the hour of last update
+      const entriesByDate: Record<string, any> = {}
+      plannerEntries.forEach((entry: any) => {
+        entriesByDate[entry.planner_date] = entry
+        
+        // Extract hour from updated_at for hour distribution
+        if (entry.updated_at) {
+          const updateDate = new Date(entry.updated_at)
+          const hour = updateDate.getHours()
+          
+          if (entry.mood) {
+            moodHours[hour] = (moodHours[hour] || 0) + 1
+          }
+          if (entry.tasks && Array.isArray(entry.tasks) && entry.tasks.length > 0) {
+            productivityHours[hour] = (productivityHours[hour] || 0) + 1
+          }
+        }
+      })
+
+      for (let i = daysToShow - 1; i >= 0; i--) {
+        const date = new Date(today)
+        date.setDate(date.getDate() - i)
+        const dateStr = date.toISOString().split("T")[0]
+        
+        // Format label (day name + date)
+        const dayName = date.toLocaleDateString(language === "pt" ? "pt-BR" : language === "es" ? "es-ES" : "en-US", { weekday: "short" })
+        const dayNumber = date.getDate()
+        const month = date.toLocaleDateString(language === "pt" ? "pt-BR" : language === "es" ? "es-ES" : "en-US", { month: "short" })
+        const label = `${dayName} ${dayNumber}/${month}`
+        
+        const entry = entriesByDate[dateStr]
+        
+        // Each day has 1 entry (due to UNIQUE constraint), but we track if it was updated
+        const hasUpdate = entry ? 1 : 0
+        const updateHour = entry?.updated_at ? new Date(entry.updated_at).getHours() : null
+        
+        if (entry) {
+          // Mood: convert emoji to percentage
+          const moodValue = moodEmojiToValue(entry.mood)
+          moodTrend.push(moodValueToPercentage(moodValue))
+          moodLabelsArray.push(label)
+          moodUpdatesCount.push(hasUpdate)
+          
+          // Productivity: calculate based on task completion rate
+          if (entry.tasks && Array.isArray(entry.tasks)) {
+            const totalTasks = entry.tasks.length
+            const completedTasks = entry.tasks.filter((t: any) => t.completed).length
+            const productivity = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0
+            productivityTrend.push(productivity)
+            productivityLabelsArray.push(label)
+            productivityUpdatesCount.push(hasUpdate)
+          } else {
+            productivityTrend.push(0)
+            productivityLabelsArray.push(label)
+            productivityUpdatesCount.push(0)
+          }
+        } else {
+          // No entry for this day
+          moodTrend.push(0)
+          moodLabelsArray.push(label)
+          moodUpdatesCount.push(0)
+          productivityTrend.push(0)
+          productivityLabelsArray.push(label)
+          productivityUpdatesCount.push(0)
+        }
+      }
+
+      setMoodData(moodTrend)
+      setProductivityData(productivityTrend)
+      setMoodLabels(moodLabelsArray)
+      setProductivityLabels(productivityLabelsArray)
+      setMoodUpdatesPerDay(moodUpdatesCount)
+      setProductivityUpdatesPerDay(productivityUpdatesCount)
+      setMoodHourDistribution(moodHours)
+      setProductivityHourDistribution(productivityHours)
+
+      // Calculate recovery score, mental clarity, and energy level
+      // Recovery score: based on consistency (days with planner entries), task completion, and mood
+      const totalDays = plannerEntries.length
+      const daysWithGoal = plannerEntries.filter((e) => e.daily_goal).length
+      let totalTasks = 0
+      let completedTasks = 0
+      let totalMoodValue = 0
+      let moodCount = 0
+
+      plannerEntries.forEach((entry) => {
+        if (entry.tasks && Array.isArray(entry.tasks)) {
+          totalTasks += entry.tasks.length
+          completedTasks += entry.tasks.filter((t: any) => t.completed).length
+        }
+        if (entry.mood) {
+          totalMoodValue += moodEmojiToValue(entry.mood)
+          moodCount++
+        }
+      })
+
+      const goalConsistency = totalDays > 0 ? (daysWithGoal / totalDays) * 100 : 0
+      const taskCompletionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0
+      const avgMood = moodCount > 0 ? moodValueToPercentage(totalMoodValue / moodCount) : 50
+
+      // Recovery score: weighted average
+      const calculatedRecoveryScore = Math.round(
+        goalConsistency * 0.3 + taskCompletionRate * 0.4 + avgMood * 0.3
+      )
+      setRecoveryScore(calculatedRecoveryScore)
+
+      // Mental clarity: based on reflection completion and task organization
+      const daysWithReflection = plannerEntries.filter((e) => e.reflection && e.reflection.trim().length > 0).length
+      const reflectionRate = totalDays > 0 ? (daysWithReflection / totalDays) * 100 : 0
+      const calculatedMentalClarity = Math.round(
+        reflectionRate * 0.5 + taskCompletionRate * 0.5
+      )
+      setMentalClarity(calculatedMentalClarity)
+
+      // Energy level: based on task completion and consistency
+      const calculatedEnergyLevel = Math.round(
+        taskCompletionRate * 0.6 + goalConsistency * 0.4
+      )
+      setEnergyLevel(calculatedEnergyLevel)
+    } catch (error) {
+      console.error("Error loading analytics data:", error)
+    }
+  }
+
   // Load planner metrics
   useEffect(() => {
     loadPlannerMetrics()
+    loadAnalyticsData()
     
     // Set up real-time subscription
     let channel: any = null
@@ -93,6 +299,7 @@ export default function AnalyticsPage() {
           () => {
             // Reload metrics when planner data changes
             loadPlannerMetrics()
+            loadAnalyticsData()
           }
         )
         .subscribe()
@@ -268,24 +475,36 @@ export default function AnalyticsPage() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-20 md:pt-8 py-6 md:py-8 space-y-6 md:space-y-8 pb-20 md:pb-8">
           {/* Recovery Score */}
           <Card className="p-6 md:p-8 venser-card-glow">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8">
-              <div className="flex justify-center">
-                <div className="scale-90 md:scale-100 lg:scale-110">
-                  <ProgressRing progress={recoveryScore} size={200}>
-                    <div className="text-center">
-                      <div className="text-4xl md:text-5xl lg:text-6xl font-bold bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] bg-clip-text text-transparent">
+            <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-6 md:gap-8">
+              <div className="flex justify-center md:justify-start w-full md:w-auto">
+                <div className="w-full max-w-[280px] md:max-w-none">
+                  <ProgressRing progress={recoveryScore} size={280} strokeWidth={16}>
+                    <div className="text-center px-4">
+                      <div className="text-5xl md:text-6xl lg:text-7xl font-bold bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] bg-clip-text text-transparent leading-none">
                         {recoveryScore}%
                       </div>
-                      <p className="text-xs md:text-sm text-muted-foreground mt-2">{t.recoveryScore}</p>
+                      <p className="text-sm md:text-base text-muted-foreground mt-3 font-medium">{t.recoveryScore}</p>
+                      <div className="mt-4 pt-4 border-t border-border/50">
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <p className="text-muted-foreground">{t.mentalClarity}</p>
+                            <p className="text-lg font-semibold text-[oklch(0.7_0.15_220)]">{mentalClarity}%</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">{t.energyLevel}</p>
+                            <p className="text-lg font-semibold text-[oklch(0.68_0.18_45)]">{energyLevel}%</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </ProgressRing>
                 </div>
               </div>
 
-              <div className="flex-1 w-full space-y-4">
+              <div className="flex-1 w-full space-y-4 md:pl-4">
                 <div>
-                  <h2 className="text-xl md:text-2xl font-bold mb-2">{t.excellentProgress}</h2>
-                  <p className="text-muted-foreground">{t.focusIncrease}</p>
+                  <h2 className="text-xl md:text-2xl lg:text-3xl font-bold mb-2">{t.excellentProgress}</h2>
+                  <p className="text-sm md:text-base text-muted-foreground">{t.focusIncrease}</p>
                 </div>
 
                 <Tabs value={period} onValueChange={(v) => setPeriod(v as typeof period)} className="w-full">
@@ -331,20 +550,250 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Trends */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-            <Card className="p-6">
-              <LineChartSimple data={moodData} color="oklch(0.54 0.18 285)" label={t.moodTrend} />
-              <div className="mt-4 flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{t.avgMood}</span>
-                <span className="font-semibold text-[oklch(0.54_0.18_285)]">72%</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 md:gap-6">
+            <Card className="p-6 md:p-8 bg-gradient-to-br from-[oklch(0.54_0.18_285)]/5 to-transparent border-[oklch(0.54_0.18_285)]/20">
+              <div className="mb-6">
+                <h3 className="text-lg md:text-xl font-bold mb-2 flex items-center gap-2">
+                  <Smile className="h-5 w-5 text-[oklch(0.54_0.18_285)]" />
+                  {t.moodTrend}
+                </h3>
+                <p className="text-xs md:text-sm text-muted-foreground">
+                  {language === "pt" ? "Evolução do seu humor nos últimos dias" : language === "es" ? "Evolución de tu humor en los últimos días" : "Your mood evolution over recent days"}
+                </p>
+              </div>
+              <div className="h-48 md:h-56 mb-4">
+                <LineChartSimple 
+                  data={moodData} 
+                  color="oklch(0.54 0.18 285)" 
+                  label="" 
+                  labels={moodLabels}
+                  showLabels={true}
+                />
+              </div>
+              
+              {/* Additional Info: Days, updates and hour distribution */}
+              <div className="mb-4 space-y-3">
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <p className="text-muted-foreground mb-1 text-[10px]">
+                      {language === "pt" ? "Dias com dados" : language === "es" ? "Días con datos" : "Days with data"}
+                    </p>
+                    <p className="text-base font-semibold text-[oklch(0.54_0.18_285)]">
+                      {moodUpdatesPerDay.filter(v => v > 0).length}
+                    </p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <p className="text-muted-foreground mb-1 text-[10px]">
+                      {language === "pt" ? "Total de dias" : language === "es" ? "Total de días" : "Total days"}
+                    </p>
+                    <p className="text-base font-semibold text-[oklch(0.54_0.18_285)]">
+                      {moodLabels.length}
+                    </p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <p className="text-muted-foreground mb-1 text-[10px]">
+                      {language === "pt" ? "Taxa de uso" : language === "es" ? "Tasa de uso" : "Usage rate"}
+                    </p>
+                    <p className="text-base font-semibold text-[oklch(0.54_0.18_285)]">
+                      {moodLabels.length > 0 
+                        ? Math.round((moodUpdatesPerDay.filter(v => v > 0).length / moodLabels.length) * 100)
+                        : 0}%
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Hour distribution */}
+                {Object.keys(moodHourDistribution).length > 0 && (
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-xs text-muted-foreground mb-2 font-medium">
+                      {language === "pt" ? "Horário mais frequente de registro" : language === "es" ? "Horario más frecuente de registro" : "Most frequent registration time"}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const maxHour = Object.entries(moodHourDistribution)
+                          .sort(([, a], [, b]) => b - a)[0]?.[0]
+                        if (!maxHour) return <span className="text-sm">-</span>
+                        const hour = parseInt(maxHour)
+                        const count = moodHourDistribution[hour]
+                        return (
+                          <>
+                            <span className="text-lg font-bold text-[oklch(0.54_0.18_285)]">
+                              {hour.toString().padStart(2, '0')}:00
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              ({count} {language === "pt" ? "registros" : language === "es" ? "registros" : "records"})
+                            </span>
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">{t.avgMood}</p>
+                    <p className="text-2xl md:text-3xl font-bold text-[oklch(0.54_0.18_285)]">
+                      {(() => {
+                        const validData = moodData.filter(v => v > 0)
+                        return validData.length > 0 
+                          ? Math.round(validData.reduce((a, b) => a + b, 0) / validData.length) 
+                          : 0
+                      })()}%
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {language === "pt" ? "Tendência" : language === "es" ? "Tendencia" : "Trend"}
+                    </p>
+                    <div className="flex items-center gap-1 text-[oklch(0.54_0.18_285)]">
+                      {(() => {
+                        const validData = moodData.filter(v => v > 0)
+                        if (validData.length < 2) return <span className="text-sm font-semibold">-</span>
+                        const first = validData[0]
+                        const last = validData[validData.length - 1]
+                        const diff = last - first
+                        return (
+                          <>
+                            {diff > 0 ? (
+                              <TrendingUp className="h-4 w-4" />
+                            ) : diff < 0 ? (
+                              <TrendingUp className="h-4 w-4 rotate-180" />
+                            ) : null}
+                            <span className="text-sm font-semibold">
+                              {diff > 0 ? "+" : ""}{Math.round(diff)}%
+                            </span>
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                </div>
               </div>
             </Card>
 
-            <Card className="p-6">
-              <LineChartSimple data={productivityData} color="oklch(0.7 0.15 220)" label={t.productivityTrend} />
-              <div className="mt-4 flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{t.completionRate}</span>
-                <span className="font-semibold text-[oklch(0.7_0.15_220)]">86%</span>
+            <Card className="p-6 md:p-8 bg-gradient-to-br from-[oklch(0.7_0.15_220)]/5 to-transparent border-[oklch(0.7_0.15_220)]/20">
+              <div className="mb-6">
+                <h3 className="text-lg md:text-xl font-bold mb-2 flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-[oklch(0.7_0.15_220)]" />
+                  {t.productivityTrend}
+                </h3>
+                <p className="text-xs md:text-sm text-muted-foreground">
+                  {language === "pt" ? "Sua produtividade ao longo do tempo" : language === "es" ? "Tu productividad a lo largo del tiempo" : "Your productivity over time"}
+                </p>
+              </div>
+              <div className="h-48 md:h-56 mb-4">
+                <LineChartSimple 
+                  data={productivityData} 
+                  color="oklch(0.7 0.15 220)" 
+                  label="" 
+                  labels={productivityLabels}
+                  showLabels={true}
+                />
+              </div>
+              
+              {/* Additional Info: Days, updates and hour distribution */}
+              <div className="mb-4 space-y-3">
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <p className="text-muted-foreground mb-1 text-[10px]">
+                      {language === "pt" ? "Dias com dados" : language === "es" ? "Días con datos" : "Days with data"}
+                    </p>
+                    <p className="text-base font-semibold text-[oklch(0.7_0.15_220)]">
+                      {productivityUpdatesPerDay.filter(v => v > 0).length}
+                    </p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <p className="text-muted-foreground mb-1 text-[10px]">
+                      {language === "pt" ? "Total de dias" : language === "es" ? "Total de días" : "Total days"}
+                    </p>
+                    <p className="text-base font-semibold text-[oklch(0.7_0.15_220)]">
+                      {productivityLabels.length}
+                    </p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <p className="text-muted-foreground mb-1 text-[10px]">
+                      {language === "pt" ? "Taxa de uso" : language === "es" ? "Tasa de uso" : "Usage rate"}
+                    </p>
+                    <p className="text-base font-semibold text-[oklch(0.7_0.15_220)]">
+                      {productivityLabels.length > 0 
+                        ? Math.round((productivityUpdatesPerDay.filter(v => v > 0).length / productivityLabels.length) * 100)
+                        : 0}%
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Hour distribution */}
+                {Object.keys(productivityHourDistribution).length > 0 && (
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-xs text-muted-foreground mb-2 font-medium">
+                      {language === "pt" ? "Horário mais frequente de registro" : language === "es" ? "Horario más frecuente de registro" : "Most frequent registration time"}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const maxHour = Object.entries(productivityHourDistribution)
+                          .sort(([, a], [, b]) => b - a)[0]?.[0]
+                        if (!maxHour) return <span className="text-sm">-</span>
+                        const hour = parseInt(maxHour)
+                        const count = productivityHourDistribution[hour]
+                        return (
+                          <>
+                            <span className="text-lg font-bold text-[oklch(0.7_0.15_220)]">
+                              {hour.toString().padStart(2, '0')}:00
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              ({count} {language === "pt" ? "registros" : language === "es" ? "registros" : "records"})
+                            </span>
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">{t.completionRate}</p>
+                    <p className="text-2xl md:text-3xl font-bold text-[oklch(0.7_0.15_220)]">
+                      {(() => {
+                        const validData = productivityData.filter(v => v > 0)
+                        return validData.length > 0 
+                          ? Math.round(validData.reduce((a, b) => a + b, 0) / validData.length) 
+                          : 0
+                      })()}%
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {language === "pt" ? "Tendência" : language === "es" ? "Tendencia" : "Trend"}
+                    </p>
+                    <div className="flex items-center gap-1 text-[oklch(0.7_0.15_220)]">
+                      {(() => {
+                        const validData = productivityData.filter(v => v > 0)
+                        if (validData.length < 2) return <span className="text-sm font-semibold">-</span>
+                        const first = validData[0]
+                        const last = validData[validData.length - 1]
+                        const diff = last - first
+                        return (
+                          <>
+                            {diff > 0 ? (
+                              <TrendingUp className="h-4 w-4" />
+                            ) : diff < 0 ? (
+                              <TrendingUp className="h-4 w-4 rotate-180" />
+                            ) : null}
+                            <span className="text-sm font-semibold">
+                              {diff > 0 ? "+" : ""}{Math.round(diff)}%
+                            </span>
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                </div>
               </div>
             </Card>
           </div>

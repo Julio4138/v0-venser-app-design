@@ -947,29 +947,63 @@ export default function TasksPage() {
                           : "Set your purpose for today - this will guide your actions"}
                       </p>
                     </div>
-                    <div className="relative">
-                      <Textarea
-                        value={plannerData.daily_goal || ""}
-                        onChange={(e) => {
-                          const newValue = e.target.value
-                          setPlannerData({ ...plannerData, daily_goal: newValue })
-                          if (!plannerData.daily_goal || plannerData.daily_goal.trim() === "") {
-                            setGoalWasEmpty(true)
-                          }
-                        }}
-                        onFocus={() => {
-                          setGoalWasEmpty(!plannerData.daily_goal || plannerData.daily_goal.trim() === "")
-                        }}
-                        onBlur={(e) => {
-                          const hasValue = e.target.value.trim().length > 0
-                          if (hasValue && goalWasEmpty && !goalFeedback) {
-                            setGoalFeedback(true)
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Textarea
+                          value={plannerData.daily_goal || ""}
+                          onChange={(e) => {
+                            const newValue = e.target.value
+                            setPlannerData({ ...plannerData, daily_goal: newValue })
+                            if (!plannerData.daily_goal || plannerData.daily_goal.trim() === "") {
+                              setGoalWasEmpty(true)
+                            }
+                          }}
+                          onFocus={() => {
+                            setGoalWasEmpty(!plannerData.daily_goal || plannerData.daily_goal.trim() === "")
+                          }}
+                          onBlur={(e) => {
+                            const hasValue = e.target.value.trim().length > 0
+                            if (hasValue && goalWasEmpty && !goalFeedback) {
+                              setGoalFeedback(true)
+                              toast.success(
+                                language === "pt" 
+                                  ? "Objetivo definido. Agora o dia tem direção. 🎯"
+                                  : "Goal set. Now the day has direction. 🎯",
+                                {
+                                  duration: 4000,
+                                  style: {
+                                    background: "linear-gradient(to right, oklch(0.54 0.18 285), oklch(0.7 0.15 220))",
+                                    color: "white",
+                                    border: "1px solid rgba(255, 255, 255, 0.2)",
+                                  },
+                                }
+                              )
+                              setTimeout(() => {
+                                setGoalFeedback(false)
+                                setGoalWasEmpty(false)
+                              }, 2000)
+                            }
+                          }}
+                          placeholder={t.dailyGoalPlaceholder}
+                          className={cn(
+                            "min-h-[100px] bg-background/50 border-white/10 focus:border-[oklch(0.54_0.18_285)]/50 transition-all",
+                            goalFeedback && "animate-pulse shadow-lg shadow-[oklch(0.54_0.18_285)]/50"
+                          )}
+                        />
+                        {goalFeedback && (
+                          <div className="absolute inset-0 pointer-events-none rounded-lg bg-gradient-to-r from-[oklch(0.54_0.18_285)]/20 via-transparent to-[oklch(0.7_0.15_220)]/20 animate-pulse" />
+                        )}
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={() => {
+                            savePlannerData()
                             toast.success(
                               language === "pt" 
-                                ? "Objetivo definido. Agora o dia tem direção. 🎯"
-                                : "Goal set. Now the day has direction. 🎯",
+                                ? "Objetivo salvo! 🎯"
+                                : "Goal saved! 🎯",
                               {
-                                duration: 4000,
+                                duration: 3000,
                                 style: {
                                   background: "linear-gradient(to right, oklch(0.54 0.18 285), oklch(0.7 0.15 220))",
                                   color: "white",
@@ -977,21 +1011,13 @@ export default function TasksPage() {
                                 },
                               }
                             )
-                            setTimeout(() => {
-                              setGoalFeedback(false)
-                              setGoalWasEmpty(false)
-                            }, 2000)
-                          }
-                        }}
-                        placeholder={t.dailyGoalPlaceholder}
-                        className={cn(
-                          "min-h-[100px] bg-background/50 border-white/10 focus:border-[oklch(0.54_0.18_285)]/50 transition-all",
-                          goalFeedback && "animate-pulse shadow-lg shadow-[oklch(0.54_0.18_285)]/50"
-                        )}
-                      />
-                      {goalFeedback && (
-                        <div className="absolute inset-0 pointer-events-none rounded-lg bg-gradient-to-r from-[oklch(0.54_0.18_285)]/20 via-transparent to-[oklch(0.7_0.15_220)]/20 animate-pulse" />
-                      )}
+                          }}
+                          className="bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] hover:opacity-90 transition-opacity"
+                        >
+                          <Save className="h-4 w-4 mr-2" />
+                          {language === "pt" ? "Salvar" : "Save"}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1226,14 +1252,55 @@ export default function TasksPage() {
                           : "Celebrate your achievements - rewards reinforce positive behaviors"}
                       </p>
                     </div>
-                    <Input
-                      value={plannerData.reward || ""}
-                      onChange={(e) =>
-                        setPlannerData({ ...plannerData, reward: e.target.value })
-                      }
-                      placeholder={t.rewardPlaceholder}
-                      className="bg-background/50 border-white/10 focus:border-[oklch(0.68_0.18_45)]/50 transition-all"
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        value={plannerData.reward || ""}
+                        onChange={(e) =>
+                          setPlannerData({ ...plannerData, reward: e.target.value })
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            savePlannerData()
+                            toast.success(
+                              language === "pt" 
+                                ? "Recompensa salva! 🎉"
+                                : "Reward saved! 🎉",
+                              {
+                                duration: 3000,
+                                style: {
+                                  background: "linear-gradient(to right, oklch(0.68 0.18 45), oklch(0.54 0.18 285))",
+                                  color: "white",
+                                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                                },
+                              }
+                            )
+                          }
+                        }}
+                        placeholder={t.rewardPlaceholder}
+                        className="bg-background/50 border-white/10 focus:border-[oklch(0.68_0.18_45)]/50 transition-all flex-1"
+                      />
+                      <Button
+                        onClick={() => {
+                          savePlannerData()
+                          toast.success(
+                            language === "pt" 
+                              ? "Recompensa salva! 🎉"
+                              : "Reward saved! 🎉",
+                            {
+                              duration: 3000,
+                              style: {
+                                background: "linear-gradient(to right, oklch(0.68 0.18 45), oklch(0.54 0.18 285))",
+                                color: "white",
+                                border: "1px solid rgba(255, 255, 255, 0.2)",
+                              },
+                            }
+                          )
+                        }}
+                        className="bg-gradient-to-r from-[oklch(0.68_0.18_45)] to-[oklch(0.54_0.18_285)] hover:opacity-90 transition-opacity"
+                      >
+                        <Save className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -1259,42 +1326,68 @@ export default function TasksPage() {
                           : "Review your day - reflection consolidates learning and growth"}
                       </p>
                     </div>
-                    <div className="relative">
-                      <Textarea
-                        value={plannerData.reflection || ""}
-                        onChange={(e) => {
-                          setPlannerData({ ...plannerData, reflection: e.target.value })
-                        }}
-                        onBlur={(e) => {
-                          if (e.target.value.trim().length > 0 && !reflectionActive) {
-                            setReflectionActive(true)
-                            setTimeout(() => {
-                              toast.success(
-                                language === "pt" 
-                                  ? "Respire. O aprendizado de hoje vale mais que o erro de ontem. 🕊️"
-                                  : language === "es"
-                                  ? "Respira. El aprendizaje de hoy vale más que el error de ayer. 🕊️"
-                                  : "Breathe. Today's learning is worth more than yesterday's mistake. 🕊️",
-                                {
-                                  duration: 6000,
-                                  style: {
-                                    background: "linear-gradient(to right, oklch(0.54 0.18 285), oklch(0.7 0.15 220))",
-                                    color: "white",
-                                    border: "1px solid rgba(255, 255, 255, 0.2)",
-                                  },
-                                }
-                              )
-                            }, 500)
-                          } else if (e.target.value.trim().length === 0) {
-                            setReflectionActive(false)
-                          }
-                        }}
-                        placeholder={t.reflectionPlaceholder}
-                        className={cn(
-                          "min-h-[140px] bg-background/50 border-white/10 focus:border-[oklch(0.54_0.18_285)]/50 transition-all",
-                          reflectionActive && "bg-background/60"
-                        )}
-                      />
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Textarea
+                          value={plannerData.reflection || ""}
+                          onChange={(e) => {
+                            setPlannerData({ ...plannerData, reflection: e.target.value })
+                          }}
+                          onBlur={(e) => {
+                            if (e.target.value.trim().length > 0 && !reflectionActive) {
+                              setReflectionActive(true)
+                              setTimeout(() => {
+                                toast.success(
+                                  language === "pt" 
+                                    ? "Respire. O aprendizado de hoje vale mais que o erro de ontem. 🕊️"
+                                    : language === "es"
+                                    ? "Respira. El aprendizaje de hoy vale más que el error de ayer. 🕊️"
+                                    : "Breathe. Today's learning is worth more than yesterday's mistake. 🕊️",
+                                  {
+                                    duration: 6000,
+                                    style: {
+                                      background: "linear-gradient(to right, oklch(0.54 0.18 285), oklch(0.7 0.15 220))",
+                                      color: "white",
+                                      border: "1px solid rgba(255, 255, 255, 0.2)",
+                                    },
+                                  }
+                                )
+                              }, 500)
+                            } else if (e.target.value.trim().length === 0) {
+                              setReflectionActive(false)
+                            }
+                          }}
+                          placeholder={t.reflectionPlaceholder}
+                          className={cn(
+                            "min-h-[140px] bg-background/50 border-white/10 focus:border-[oklch(0.54_0.18_285)]/50 transition-all",
+                            reflectionActive && "bg-background/60"
+                          )}
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={() => {
+                            savePlannerData()
+                            toast.success(
+                              language === "pt" 
+                                ? "Reflexão salva! 🕊️"
+                                : "Reflection saved! 🕊️",
+                              {
+                                duration: 3000,
+                                style: {
+                                  background: "linear-gradient(to right, oklch(0.54 0.18 285), oklch(0.7 0.15 220))",
+                                  color: "white",
+                                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                                },
+                              }
+                            )
+                          }}
+                          className="bg-gradient-to-r from-[oklch(0.54_0.18_285)] to-[oklch(0.7_0.15_220)] hover:opacity-90 transition-opacity"
+                        >
+                          <Save className="h-4 w-4 mr-2" />
+                          {language === "pt" ? "Salvar" : "Save"}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1392,16 +1485,15 @@ export default function TasksPage() {
                           {language === "pt" ? "Conversar com Tony" : "Chat with Tony"}
                         </Button>
                       </Link>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setTonyMessage(generateTonyMessage())
-                          toast.success(language === "pt" ? "Mensagem atualizada! 💚" : "Message updated! 💚")
-                        }}
-                      >
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        {language === "pt" ? "Nova mensagem" : "New message"}
-                      </Button>
+                      <Link href="/tony">
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                        >
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          {language === "pt" ? "Nova mensagem" : "New message"}
+                        </Button>
+                      </Link>
                     </div>
                   </div>
                 </div>
