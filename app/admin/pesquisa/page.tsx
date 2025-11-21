@@ -146,12 +146,27 @@ export default function AdminResearchPage() {
         .select("*")
         .order("display_order", { ascending: true })
 
-      if (error) throw error
+      if (error) {
+        console.error("Error loading articles:", {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw error
+      }
 
       setArticles(data || [])
     } catch (error: any) {
-      console.error("Error loading articles:", error)
-      toast.error(error.message || "Erro ao carregar artigos")
+      const errorMessage = error?.message || error?.details || "Erro ao carregar artigos"
+      console.error("Error loading articles:", {
+        message: errorMessage,
+        error: error,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code
+      })
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
     }

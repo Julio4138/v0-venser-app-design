@@ -20,7 +20,9 @@ import {
   Music,
   Video,
   Clock,
-  Loader2
+  Loader2,
+  ArrowLeft,
+  List
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -44,11 +46,23 @@ interface Podcast {
   author_es: string | null
 }
 
+interface Playlist {
+  id: string
+  name_pt: string
+  name_en: string
+  name_es: string
+  description_pt: string | null
+  description_en: string | null
+  description_es: string | null
+}
+
 export default function PlaylistPage() {
   const { language } = useLanguage()
   const t = translations[language]
   const { collapsed } = useSidebar()
   const router = useRouter()
+  const [playlists, setPlaylists] = useState<Playlist[]>([])
+  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null)
   const [podcasts, setPodcasts] = useState<Podcast[]>([])
   const [loading, setLoading] = useState(true)
   const [currentPodcast, setCurrentPodcast] = useState<Podcast | null>(null)
@@ -62,8 +76,16 @@ export default function PlaylistPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
   useEffect(() => {
-    loadPodcasts()
+    loadPlaylists()
   }, [])
+
+  useEffect(() => {
+    if (selectedPlaylist) {
+      loadPlaylistPodcasts(selectedPlaylist.id)
+    } else {
+      setPodcasts([])
+    }
+  }, [selectedPlaylist])
 
   useEffect(() => {
     if (currentPodcast) {
@@ -77,19 +99,45 @@ export default function PlaylistPage() {
     }
   }, [currentPodcast])
 
-  const loadPodcasts = async () => {
+  const loadPlaylists = async () => {
     try {
       setLoading(true)
       const { data, error } = await supabase
-        .from("podcasts")
+        .from("playlists")
         .select("*")
         .eq("is_active", true)
         .order("display_order", { ascending: true })
 
       if (error) throw error
-      setPodcasts(data || [])
+      setPlaylists(data || [])
     } catch (error: any) {
-      console.error("Error loading podcasts:", error)
+      console.error("Error loading playlists:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadPlaylistPodcasts = async (playlistId: string) => {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from("playlist_items")
+        .select(`
+          display_order,
+          podcast:podcasts(*)
+        `)
+        .eq("playlist_id", playlistId)
+        .order("display_order", { ascending: true })
+
+      if (error) throw error
+
+      const podcastsData = (data || [])
+        .map((item: any) => item.podcast)
+        .filter((podcast: any) => podcast && podcast.is_active) as Podcast[]
+
+      setPodcasts(podcastsData)
+    } catch (error: any) {
+      console.error("Error loading playlist podcasts:", error)
     } finally {
       setLoading(false)
     }
@@ -117,6 +165,31 @@ export default function PlaylistPage() {
     if (language === "pt") return podcast.author_pt
     if (language === "en") return podcast.author_en
     return podcast.author_es
+  }
+
+  const getPlaylistName = (playlist: Playlist) => {
+    if (language === "pt") return playlist.name_pt
+    if (language === "en") return playlist.name_en
+    return playlist.name_es
+  }
+
+  const getPlaylistDescription = (playlist: Playlist) => {
+    if (language === "pt") return playlist.description_pt
+    if (language === "en") return playlist.description_en
+    return playlist.description_es
+  }
+
+  const handlePlaylistSelect = (playlist: Playlist) => {
+    setSelectedPlaylist(playlist)
+    setCurrentPodcast(null)
+    setIsPlaying(false)
+  }
+
+  const handleBackToPlaylists = () => {
+    setSelectedPlaylist(null)
+    setCurrentPodcast(null)
+    setIsPlaying(false)
+    setPodcasts([])
   }
 
   const formatTime = (seconds: number) => {
@@ -254,8 +327,32 @@ export default function PlaylistPage() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-20 md:pt-8 py-6 md:py-8 pb-32 md:pb-8 relative z-10">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-2">{t.podcasts}</h1>
-            <p className="text-white/70">{t.podcastLibrary}</p>
+            {selectedPlaylist ? (
+              <div className="flex items-center gap-4 mb-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleBackToPlaylists}
+                  className="text-white hover:bg-white/10"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Voltar
+                </Button>
+                <div>
+                  <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-2">
+                    {getPlaylistName(selectedPlaylist)}
+                  </h1>
+                  {getPlaylistDescription(selectedPlaylist) && (
+                    <p className="text-white/70">{getPlaylistDescription(selectedPlaylist)}</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-2">{t.podcasts}</h1>
+                <p className="text-white/70">{t.podcastLibrary}</p>
+              </>
+            )}
           </div>
 
           {/* Video Player (se vídeo estiver tocando) */}
@@ -274,14 +371,51 @@ export default function PlaylistPage() {
             </div>
           )}
 
-          {/* Playlist */}
-          <div className="space-y-2 mb-8">
-            {podcasts.length === 0 ? (
-              <div className="text-center py-12 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl">
-                <Music className="h-12 w-12 mx-auto mb-4 text-white/50" />
-                <p className="text-white/70">{t.noPodcasts}</p>
-              </div>
-            ) : (
+          {/* Playlists ou Podcasts */}
+          {!selectedPlaylist ? (
+            /* Lista de Playlists */
+            <div className="space-y-4 mb-8">
+              {playlists.length === 0 ? (
+                <div className="text-center py-12 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl">
+                  <List className="h-12 w-12 mx-auto mb-4 text-white/50" />
+                  <p className="text-white/70">Nenhuma playlist disponível</p>
+                </div>
+              ) : (
+                playlists.map((playlist) => (
+                  <div
+                    key={playlist.id}
+                    className="bg-black/20 backdrop-blur-md border border-white/10 rounded-xl p-6 cursor-pointer transition-all hover:bg-black/30 hover:border-white/20"
+                    onClick={() => handlePlaylistSelect(playlist)}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-[oklch(0.54_0.18_285)] to-[oklch(0.54_0.18_285)]/70 flex items-center justify-center">
+                          <List className="h-8 w-8 text-white" />
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-white text-lg mb-1">{getPlaylistName(playlist)}</h3>
+                        {getPlaylistDescription(playlist) && (
+                          <p className="text-white/60 text-sm">{getPlaylistDescription(playlist)}</p>
+                        )}
+                      </div>
+                      <div className="flex-shrink-0">
+                        <Play className="h-6 w-6 text-white/70" />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            /* Lista de Podcasts da Playlist Selecionada */
+            <div className="space-y-2 mb-8">
+              {podcasts.length === 0 ? (
+                <div className="text-center py-12 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl">
+                  <Music className="h-12 w-12 mx-auto mb-4 text-white/50" />
+                  <p className="text-white/70">Nenhum podcast nesta playlist</p>
+                </div>
+              ) : (
               podcasts.map((podcast) => {
                 const isCurrent = currentPodcast?.id === podcast.id
                 return (
@@ -375,8 +509,9 @@ export default function PlaylistPage() {
                   </div>
                 )
               })
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
 

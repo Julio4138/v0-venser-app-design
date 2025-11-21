@@ -223,7 +223,11 @@ export default function AdminPodcastPage() {
           .eq("id", selectedPodcast.id)
 
         if (error) throw error
-        toast.success("Podcast atualizado com sucesso!")
+        toast.success("Podcast atualizado com sucesso!", {
+          description: selectedPodcast.is_active 
+            ? "O podcast está visível na playlist" 
+            : "O podcast está inativo e não aparecerá na playlist"
+        })
       } else {
         // Criar novo podcast
         const { error } = await supabase
@@ -231,7 +235,17 @@ export default function AdminPodcastPage() {
           .insert(podcastData)
 
         if (error) throw error
-        toast.success("Podcast criado com sucesso!")
+        
+        const message = selectedPodcast.is_active
+          ? "Podcast criado com sucesso! Ele já está disponível na playlist."
+          : "Podcast criado com sucesso! Ative-o para aparecer na playlist."
+        
+        toast.success(message, {
+          action: selectedPodcast.is_active ? {
+            label: "Ver na Playlist",
+            onClick: () => router.push("/playlist")
+          } : undefined
+        })
       }
 
       setIsDialogOpen(false)
