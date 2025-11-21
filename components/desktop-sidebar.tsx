@@ -92,7 +92,7 @@ export function DesktopSidebar() {
 
             return (
               <Link
-                key={item.name}
+                key={item.href}
                 href={item.href}
                 className={cn(
                   "flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2.5 md:py-3 rounded-xl text-xs md:text-sm font-medium transition-all duration-200",
